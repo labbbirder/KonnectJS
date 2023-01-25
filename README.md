@@ -1,5 +1,5 @@
 <!-- # KonnectJS -->
-![logo](.\docs\logo.png)
+![logo](docs/logo.png)
 
 [toc]
 
