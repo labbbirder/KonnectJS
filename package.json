@@ -1,0 +1,41 @@
+{
+  "name": "konnectjs",
+  "version": "1.0.0",
+  "description": "An extremely flexible abstraction of node-connections structure, which can define the network implement with only one line and more...",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/labbbirder/KonnectJS.git"
+  },
+  "keywords": [
+    "udp",
+    "tcp",
+    "ws",
+    "websocket",
+    "sse",
+    "polling",
+    "socket",
+    "kcp"
+  ],
+  "author": "labbbirder",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/labbbirder/KonnectJS/issues"
+  },
+  "homepage": "https://github.com/labbbirder/KonnectJS#readme",
+  "dependencies": {
+    "events": "^3.3.0",
+    "koa": "2.14.1"
+  },
+  "devDependencies": {
+    "@types/koa": "^2.13.5",
+    "@types/node": "^18.11.18"
+  }
+}
