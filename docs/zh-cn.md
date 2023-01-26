@@ -1,26 +1,25 @@
 
-![logo](docs/logo.png)
-[简体中文](docs/zh-cn.md)
+![logo](logo.png)
 
-An extremely flexible abstraction of node-connections structure, which designed for keep-in-connection using, can be fit with any type of network protocol
+KonnectJS 是一个非常灵活的基于结点和连接的抽象架构。专门为面向连接的应用而设计，可以随意切换各种网络协议
 
-this work is still in progress.
+此项目尚处于开发中。。。
 
 <!-- vscode-markdown-toc -->
-- [Concepts](#concepts)
+- [概念](#概念)
   - [Konnection \& Knode](#konnection--knode)
   - [Impl](#impl)
-- [Features](#features)
-- [Installation](#installation)
-- [Getting Started](#getting-started)
-  - [Start A WebSocket Server](#start-a-websocket-server)
-  - [Start A Tcp Server](#start-a-tcp-server)
-  - [Remember The Connection](#remember-the-connection)
-  - [Run without Impl](#run-without-impl)
-  - [Flexible Connections](#flexible-connections)
-- [Cascade Midwares](#cascade-midwares)
-- [Custom Midwares](#custom-midwares)
-- [Extend Implement](#extend-implement)
+- [功能](#功能)
+- [安装](#安装)
+- [开始认识](#开始认识)
+  - [运行一个WS服务器](#运行一个ws服务器)
+  - [运行一个Tcp服务器](#运行一个tcp服务器)
+  - [连接会话](#连接会话)
+  - [手动触发事件](#手动触发事件)
+  - [多种类连接](#多种类连接)
+- [层叠式中间件](#层叠式中间件)
+- [自定义中间件](#自定义中间件)
+- [扩展自定义实现](#扩展自定义实现)
 
 <!-- vscode-markdown-toc-config
 	numbering=true
@@ -28,38 +27,42 @@ this work is still in progress.
 	/vscode-markdown-toc-config -->
 <!-- /vscode-markdown-toc -->
 
-## Concepts
+## 概念
 
 ### Konnection & Knode
 
-KonnectJS has two major concepts, which are 'Konnection' & 'Knode'. 
-'Konnection' is for the same pronounce as 'Connection'(similarly hereinafter). 
-'Knode' is for the same pronounce as 'Node'(similarly hereinafter). 
-The ends of a connection are nodes. A node may has lots connections.
+KonnectJS 有两个主要的概念 'Konnection' 和 'Knode'。 
+'Konnection' 与 'Connection' 发音相同(下文不再区分)；
+'Knode' 与 'Node' 发音相同(下文不再区分)。
+连接的端点被称为结点； 一个结点可以有多个连接。
+
 
 ### Impl
 
-KonnectJS is only aware of the abstract structure. We just tell it what to do when a connection on establish, closed, transfer or error occurs. That is to say, the Konnect dont drives itself. We should set a event-based driver by calling `setImpl`. 
+KonnectJS 只关心抽象的逻辑结构，并处理在这个结构上的事件。 也就是说, KonnectJS 需要有专门的外部驱动者。 通过调用 `setImpl`. 
 For the most time, a impl is something like network protocol. However, that is not to say that Konnect can only deal with networking using.
 
 
-## Features
+## 功能
 
-For business coders, the only thing to think about is to defines how the node acts with connection events, such as:
+对于业务代码，只需要定义如何响应对应的事件:
 
-* connection - a new connection established
-* close - a connection is close by some reason
-* data - some data is transfered from a connection
-* error - an error occured on a connection
+* connection - 连接建立
+* close - 连接关闭
+* data - 数据传输
+* error - 错误发生
 
-Sometimes, there is no sense for business coders to worry about what protocol to use, what format the data is, how data is encrypted, even how the connection is established and so on. The followings are only one line code needed to set what the system consist of without any other code modification:
+有时一些简单场景，开发者不必关系与业务逻辑无关的繁琐事务。如使用何种网络协议，何种数据解析，何种加密方式，甚至是如何握手等等。下面这些内容使用KonnectJS只需要一行代码就可以切换:
 
-* set what communication protocol to use with only one line code. such as `websocket`, `tcp`, `udp`, `sse`, `polling`, `kcp`, `http3` or custom communication implement, see [Extend Implement](#extend-implement)
+* 何种通信协议。 如 `websocket`， `tcp`， `udp`， `sse`， `polling`， `kcp`，`http3` 或任意其他自定义实现，参考 [扩展自定义实现](#扩展自定义实现)
+    > 无连接的网络协议：
+    > 
+    > 对于基于请求应答的无连接通信方式，如：http，KonnectJS也可以支持。只需要提前配置好中间件，甚至能够毫无察觉的对接到Koa或Express应用中，对于大部分逻辑简单的业务代码都可以无缝切换。由于KonnectJS侧重于有连接的通信实现，此类内容放在后续完善。
   
-* set what format of the data transfered from the connection, for example `json`, `bson`, `buffer`, `string`, `protobuf` or custom data format, see [Custom Midware](#custom-midwares)
-* set how connection is established, for example extra handshake, authentication and so on
-* 
-## Installation
+* 何种数据解析格式。如 `json`, `bson`, `buffer`, `string`, `protobuf` 或其他自定义格式，参考 [自定义中间件](#自定义中间件)
+* 如何真正的建立连接。如自定义握手，自定义认证等
+* 及其他各种
+## 安装
 clone the source code:
 ```sh
 > git clone git@github.com:labbbirder/KonnectJS.git
@@ -72,20 +75,20 @@ when you installed the project successfully, it's time to import to your script:
 ```typescript
 import { Knode,Konnection } from 'KonnectJS'
 ```
-## Getting Started
-### Start A WebSocket Server
+## 开始认识
+### 运行一个WS服务器
 the code below illustrates how a websocket server is created:
 ```typescript
 import { Knode,Konnection } from 'KonnectJS'
 import { KonnectWS } from 'Konnect-ws'
 
 let node = new Knode()
-.setImpl(KonnectWS({ port:3000 })) // Immediately listen on 3000, and communicate with websocket
+.setImpl(KonnectWS({ port:3000 })) // 在3000端口监听，使用ws通信
 .use(()=>ctx=>{
     console.log("websocket message", ctx.eventType, ctx.data)
 })
 ```
-### Start A Tcp Server
+### 运行一个Tcp服务器
 the code below illustrates how a tcp server is created:
 ```typescript
 import { Knode,Konnection } from 'KonnectJS'
@@ -99,9 +102,9 @@ let node = new Knode()
 .use(()=>ctx=>{
     console.log("tcp data", ctx.eventType, ctx.data)
 })
-.setImpl(KonnectTCP({ port:3000 })) // the invoke order of setImpl does not matter
+.setImpl(KonnectTCP({ port:3000 })) // 可以任何时刻调用setImpl
 ```
-### Remember The Connection
+### 连接会话
 And you may want to know who the connection is, and want some code persistent for the same connection to be retrieved, here is the example:
 ```typescript
 import { Knode,Konnection } from 'KonnectJS'
@@ -131,7 +134,7 @@ let node = new Knode()
 .setImpl(KonnectTCP({ port:3000 })) 
 ```
 The scope of `let session = {}` is initialized the time as the connection established. The data under the scope is saved respectively.
-### Run without Impl
+### 手动触发事件
 this example shows how to drive it manually:
 ```typescript
 import { Knode,Konnection } from 'KonnectJS'
@@ -145,8 +148,8 @@ let conn = new Konnection(node)
 node.emit("connection",conn) // establish a connection manually
 conn.emit("data","hello there") // transfer a data via connection manually
 ```
-### Flexible Connections
-And you may what to keep a standalone connection to another server with different logic, here comes an example:
+### 多种类连接
+有时候额外需要一个到内部服务器的单独连接，运行着不同的逻辑。这是例子:
 
 ```typescript
 import { Knode,Konnection } from 'KonnectJS'
@@ -157,7 +160,7 @@ let wss = new WebSocketServer({
 })
 let node = new Knode()
 .use(()=>{
-    // for lots of client connections...
+    // 到各个客户端的连接
     console.log("hello, new connection from client")
     return ctx=>{
         ctx.conn.send("you are a client")
@@ -165,7 +168,7 @@ let node = new Knode()
 })
 .setImpl(KonnectTCP({ port:3000 })) 
 
-let connA = new Konnection(node) // a standalone connection to an inner server
+let connA = new Konnection(node) // 到内部服务器的独立连接
 connA.connectTo({host:"127.0.0.1",port:3001})
 connA.use((ctx,next)=>{
     if(ctx.data==="who am I"){
@@ -173,7 +176,7 @@ connA.use((ctx,next)=>{
     }
 })
 ```
-## Cascade Midwares
+## 层叠式中间件
 the midware here is similar to which of [koa](https://github.com/koajs/koa)
 
 ```typescript
@@ -197,7 +200,7 @@ node.setImpl(KonnectWS({ port:3000 }))
 
 ```
 
-## Custom Midwares
+## 自定义中间件
 here is an example of json parser midware:
 ```typescript
 interface Context{ // declaration here
@@ -212,7 +215,8 @@ let KnonectJson = defineMidware((options?:any)=>async (ctx,next)=>{
     ctx.respData = JSON.stringify(ctx.respData)
 })
 ```
-defineMidware does nothing but return the origin function. Coders can benefit from it by code autocompletion
+defineMidware 只是简单的返回原函数，但是会在代码编辑器中引入类型提示。
+
 ```typescript
 import { Knode,Konnection } from 'KonnectJS'
 import { KnonectJson } from 'KnonectJson'
@@ -225,7 +229,7 @@ node.setImpl(KonnectWS({ port:3000 })) // use your midware
 })
 
 ```
-## Extend Implement
+## 扩展自定义实现
 On the most time, you'll need `defineImpl` function.
 here is an example of websocket implement:
 ```typescript
@@ -258,4 +262,4 @@ export let KonnectWS = defineImpl((wss:WebSocketServer)=>(node)=>{
     }
 })
 ```
-defineImpl does nothing but return the origin function. Coders can benefit from it by code autocompletion
+defineImpl 只是简单的返回原函数，但是会在代码编辑器中引入类型提示。
