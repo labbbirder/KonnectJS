@@ -40,7 +40,7 @@ KonnectJS 有两个主要的概念 'Konnection' 和 'Knode'。
 ### Impl
 
 KonnectJS 只关心抽象的逻辑结构，并处理在这个结构上的事件。 也就是说, KonnectJS 需要有专门的外部驱动者。 通过调用 `setImpl`. 
-For the most time, a impl is something like network protocol. However, that is not to say that Konnect can only deal with networking using.
+大多数情况下，Impl是一个特定的网络协议。**但是这并不意味着Impl只能是网络协议**.
 
 
 ## 功能
