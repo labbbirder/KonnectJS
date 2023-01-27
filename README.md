@@ -65,7 +65,7 @@ clone the source code:
 > git clone git@github.com:labbbirder/KonnectJS.git
 ```
 
-~or install from npmjs:~
+~or install from npmjs:~ (not yet)
 
 ```sh
 > npm i -S KonnectJS
