@@ -1,6 +1,6 @@
 
 ![logo](docs/logo.png)
-[简体中文](docs/zh-cn.md)
+[简体中文 (recommend)](docs/zh-cn.md)
 
 An extremely flexible abstraction of node-connections structure, which designed for keep-in-connection using, can be fit with any type of network protocol
 
@@ -64,7 +64,9 @@ clone the source code:
 ```sh
 > git clone git@github.com:labbbirder/KonnectJS.git
 ```
-or install from npmjs:
+
+~or install from npmjs:~
+
 ```sh
 > npm i -S KonnectJS
 ```

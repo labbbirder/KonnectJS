@@ -22,5 +22,5 @@
     },
     "include": [
         "./lib/**/*"
-    ]
+, "../LobbyServer/src/modules/Konnect-ws.ts"    ]
 }

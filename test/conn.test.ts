@@ -1,5 +1,5 @@
 // import {describe, expect, test} from '@jest/globals';
-import { Knode, Konnection } from "..";
+import { Knode, Konnection } from "../lib";
 test("connection scope",()=>{
     // // console.log("test 1")
     let node = new Knode()
@@ -7,7 +7,7 @@ test("connection scope",()=>{
         let idx = 0
         return (ctx,next)=>{
             if(ctx.eventType=="data"){
-                expect(ctx.rawData).toBe(idx)
+                expect(ctx.dataIn).toBe(idx)
                 idx += 1
             }
         }
@@ -35,7 +35,7 @@ test("connections maintain",()=>{
         let idx = 0
         return (ctx,next)=>{
             if(ctx.eventType=="data"){
-                expect(ctx.rawData).toBe(idx)
+                expect(ctx.dataIn).toBe(idx)
                 idx += 1
             }
         }
