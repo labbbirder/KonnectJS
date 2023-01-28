@@ -8,9 +8,11 @@ interface Context<TI = any,TO = any> {
     dataIn?:TI,
     dataOut?:TO,
 }
+
 export interface Address{
-    host?:string,
-    port?:number,
+    // proto?:string,
+    // host?:string,
+    // port?:number,
     url?:string,
     [k:string]:any,
 }
@@ -40,40 +42,52 @@ interface ReshapedKoa{
 type MiddlewareFunction = (ctx:Context,next:Function)=>any
 interface ConnectionImpl{
     sendTo:(conn:Konnection,data:any)=>boolean,
-    closeConnection:(conn:Konnection,code:number,reason:Buffer)=>boolean,
+    closeConnection:(conn:Konnection,reason:any)=>boolean,
     connectTo?:(conn:Konnection,addr:Address)=>boolean,
     broadcast?:(data:any)=>boolean,
     [key:string]:any
 }
 type ConnectionImplFactory = (...args:any[])=>(n:Knode)=>ConnectionImpl
 export class Konnection<TI=any,TO=any,TRaw=any> extends ReshapedKoa{
+    _established:boolean
     _index:number;
     raw:TRaw;
     localNode:Knode;
+    get established(){
+        return this._established
+    }
     constructor(localNode:Knode,raw?:TRaw){
         super()
+        this._established = false
+        this.on("connection",()=>this._established = true)
+        this.on("close",()=>this._established = false)
         this.localNode = localNode
         this.raw = raw
     }
     // send(data:any){
     //     this.localNode.impl.sendTo(this,data)
     // }
-    send(formedData:TO){
+    send(formedData:TO):boolean{
         if(!this._cb) return false
+        if(!this.established) return false
         let ctx = { conn:this, dataOut:formedData }
         this._cb("unform",ctx)
-        this.localNode.impl.sendTo(this,ctx.dataOut)
+        return this.localNode.impl.sendTo(this,ctx.dataOut)
     }
     sendWithContext(ctx:Context){
         if(!this._cb) return false
+        if(!this.established) return false
         // let context = { conn, dataOut:data }
         this._cb("unform",ctx)
         this.localNode.impl.sendTo(this,ctx.dataOut)
     }
-    close(code:number,reason:Buffer){
-        this.localNode.impl.closeConnection(this,code,reason)
+    close(reason?:any){
+        this.localNode.impl.closeConnection(this,reason)
     }
-    connectTo(addr:Address){
+    connectTo(addr:Address,reason?:any){
+        if(this.established){
+            this.close()
+        }
         this.localNode.impl.connectTo(this,addr)
     }
     _setIndex(idx:number){
@@ -82,12 +96,14 @@ export class Konnection<TI=any,TO=any,TRaw=any> extends ReshapedKoa{
     }
 }
 export interface Konnection{
+    on(event:"connection",f:(conn:Konnection)=>any):this;
     on(event:"data",f:(data:any)=>any):this;
     // on(event:"form",f:(data:any)=>any):this;
     // on(event:"unform",f:(data:any)=>any):this;
     on(event:"close",f:(data:any)=>any):this;
     on(event:"error",f:(err:Error)=>any):this;
 
+    emit(event:"connection",conn:Konnection):boolean;
     emit(event:"data",data:any):boolean;
     // emit(event:"form",data:any):boolean;
     // emit(event:"unform",data:any):boolean;
@@ -114,13 +130,20 @@ export class Knode<TI = any,TO = any> extends EventEmitter{
             let cb = conn._cb = conn.callback()
             conn.localNode = this
             for(let fac of this.midwareFactories) conn.use(fac.func(...fac.args))
+
+            conn.emit("connection",conn)
             cb("connection",{ conn })
             conn.on("data",dataIn=>{
                 let ctx:Context<TI,TO> = { conn, dataIn }
                 cb("form",ctx)
                 cb("data",ctx)
             }).on("close",dataIn=>{
-                this.connections[conn._index] = this.connections.pop()._setIndex(conn._index)
+                let taridx = conn._index
+                let tail = this.connections.pop()._setIndex(conn._index)
+                if(this.connections.length!=taridx){
+                    this.connections[taridx] = tail
+                }
+                // this.connections[conn._index] = this.connections.pop()._setIndex(conn._index)
                 cb("close",{ conn, dataIn })
             }).on("error",error=>{
                 cb("error",{ conn, error })
@@ -129,6 +152,7 @@ export class Knode<TI = any,TO = any> extends EventEmitter{
     }
     setImpl(impl:ReturnType<ConnectionImplFactory>){
         this.impl = impl(this)
+        return this
     }
     use<
         // NTI=TI, NTO=TO,
@@ -137,6 +161,9 @@ export class Knode<TI = any,TO = any> extends EventEmitter{
     >(func?:T,...args:Parameters<T>):NormalizedKnodeType<ReturnType<ReturnType<T>>,K>{
         if(!!func)this.midwareFactories.push({func,args})
         return this as any
+    }
+    ioType<NTI,NTO>(){
+        return this as any as Knode<NTI,NTO>
     }
     private isConnectionArray(conn:any):conn is Konnection[]{
         return conn instanceof Array
@@ -147,11 +174,15 @@ export class Knode<TI = any,TO = any> extends EventEmitter{
         let res = true
         if(this.isConnectionArray(connections)){
             for(let conn of connections){
-                res &&= conn.send(data);
+                let r = conn.send(data)
+                res &&= r
             }
             return res
         }
         return connections.send(data);
+    }
+    broadcast(data:TO){
+        return this.sendTo(this.connections,data);
     }
 }
 export interface Knode{
@@ -165,7 +196,35 @@ export function defineMidware<T extends (...args:any[])=>MiddlewareFunction>(f:T
     return f
 }
 
-export let SetIOType = <TI,TO>()=>defineMidware(()=>(_,next)=>next() as SetContextType<"TIO",TI,TO>)
+
+// export let SetIOType = <TI,TO>()=>defineMidware(()=>(_,next)=>{
+//     return next() as SetContextType<"TIO",TI,TO>
+// })
+export let ReformInput = defineMidware(<T>(f?:(d:any)=>T)=>(ctx,next)=>{
+    if(ctx.eventType=="form"&&!!f){
+        ctx.dataIn = f(ctx.dataIn)
+    }
+    return next() as SetContextType<"TI",T>
+})
+export let ReformOutput = defineMidware(<T>(f?:(d:any)=>T)=>(ctx,next)=>{
+    if(ctx.eventType=="unform"&&!!f){
+        ctx.dataOut = f(ctx.dataOut)
+    }
+    return next() as SetContextType<"TO",T>
+})
+export let ReformIO = defineMidware(<TI,TO=TI>(fi?:(d:any)=>TI,fo?:(d:any)=>TO)=>(ctx,next)=>{
+    fo||=fi as any;
+    if(ctx.eventType=="form"&&!!fi){
+        ctx.dataIn = fi(ctx.dataIn)
+    }
+    if(ctx.eventType=="unform"&&!!fo){
+        ctx.dataOut = fo(ctx.dataOut)
+    }
+    return next() as SetContextType<"TIO",TI,TO>
+})
+
+
+
 export let KonnectJSON = defineMidware((useUnform:boolean=true)=>{
     return (ctx,next)=>{
         if(ctx.eventType=="form"){

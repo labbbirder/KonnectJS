@@ -1,0 +1,40 @@
+{
+  "name": "konnectjs",
+  "version": "1.0.0",
+  "description": "An extremely flexible abstraction of node-connections structure, which designed for keep-in-connection using, can be fit with any type of network protocol",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "jest",
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/labbbirder/KonnectJS.git"
+  },
+  "keywords": [
+    "udp",
+    "tcp",
+    "ws",
+    "websocket",
+    "sse",
+    "polling",
+    "socket",
+    "kcp"
+  ],
+  "author": "labbbirder",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/labbbirder/KonnectJS/issues"
+  },
+  "homepage": "https://github.com/labbbirder/KonnectJS#readme",
+  "dependencies": {
+    "events": "^3.3.0",
+    "koa": "2.14.1"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.4.0",
+    "@types/koa": "^2.13.5",
+    "@types/node": "^18.11.18",
+    "ts-jest": "^29.0.5"
+  }
+}

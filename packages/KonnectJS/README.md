@@ -1,6 +1,6 @@
 
-![logo](packages/KonnectJS/docs/logo.png)
-[简体中文 (recommend)](packages/KonnectJS/docs/zh-cn.md)
+![logo](docs/logo.png)
+[简体中文 (recommend)](docs/zh-cn.md)
 
 An extremely flexible abstraction of node-connections structure, which designed for keep-in-connection using, can be fit with any type of network protocol
 
