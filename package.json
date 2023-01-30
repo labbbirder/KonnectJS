@@ -12,6 +12,10 @@
     "packages/*"
   ],
   "dependencies": {
-    "ws": "^8.12.0"
+    "ws": "^8.12.0",
+    "konnectjs":"*",
+    "konnect-ws":"*",
+    "konnect-local":"*",
+    "konnect-tcp":"*"
   }
 }

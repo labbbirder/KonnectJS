@@ -16,10 +16,10 @@
         "paths": {
             "*": [
                 "node_modules/*",
-                "src/types/*",
-                "examples/*"
+                "src/types/*"
             ]
         },
+        "typeRoots": ["./sample"]
     },
-    "includes":["examples/*"]
+    // "includes":["examples/**/*.ts","examples/**/*.d.ts",]
 }

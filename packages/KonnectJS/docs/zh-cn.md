@@ -4,10 +4,10 @@
 KonnectJS 是一个非常灵活的基于结点和连接的抽象架构。专门为面向连接的应用而设计，可以随意切换各种网络协议
 
 此项目尚处于开发中，这意味着：
-* 接口可能发生变化
-* 文档更新不匹配
-* 部分用例无法通过
-* bug和功能缺陷
+* 接口可能发生破坏性变化
+* 文档和教程错误
+* 部分未覆盖的用例无法通过
+* 存在bug和功能缺陷
 
 目录
 <!-- vscode-markdown-toc -->
@@ -32,6 +32,7 @@ KonnectJS 是一个非常灵活的基于结点和连接的抽象架构。专门�
 - [自定义中间件](#自定义中间件)
   - [一个简单的JSON中间件](#一个简单的json中间件)
   - [重定义IO为Json的中间件](#重定义io为json的中间件)
+  - [自动转发中间件](#自动转发中间件)
 - [扩展自定义实现](#扩展自定义实现)
 
 <!-- vscode-markdown-toc-config
@@ -115,10 +116,6 @@ the code below illustrates how a tcp server is created:
 import { Knode,Konnection } from 'KonnectJS'
 import { KonnectTCP } from 'Konnect-tcp'
 
-let wss = new WebSocketServer({
-    port: 3000
-})
-
 let node = new Knode()
 .use(()=>ctx=>{
     console.log("tcp data", ctx.eventType, ctx.data)
@@ -130,10 +127,6 @@ And you may want to know who the connection is, and want some code persistent fo
 ```typescript
 import { Knode,Konnection } from 'KonnectJS'
 import { KonnectTCP } from 'Konnect-tcp'
-
-let wss = new WebSocketServer({
-    port: 3000
-})
 
 let node = new Knode()
 .use(()=>{
@@ -176,9 +169,6 @@ conn.emit("data","hello there") // transfer a data via connection manually
 import { Knode,Konnection } from 'KonnectJS'
 import { KonnectTCP } from 'Konnect-tcp'
 
-let wss = new WebSocketServer({
-    port: 3000
-})
 let node = new Knode()
 .use(()=>{
     // 到各个客户端的连接
@@ -257,22 +247,22 @@ new Knode().on("connection",conn=>{
 我们可以自己设计、或者通过网络安装他人设计的中间件。实现到应用模块的无缝化界面。KonnectJS正是通过这种机制实现业务代码的最大程度解耦。
 ### 修改默认IO格式 SetIOType
 
-对于一个Context对象，dataIn和dataOut默认为any类型。如果我们希望在恰当的时候指定数据类型是可行的。我们通常用中间件`SetIOType`来做到这一点。
+对于一个Context对象，dataIn和dataOut默认为any类型。如果我们希望在恰当的时候指定数据类型是可行的。我们通常用中间件`ReformInput`、`ReformOutput`、`ReformIO`来做到这一点。
 ```typescript
 new Knode()
 .use(()=>ctx=>{
     ctx.dataIn // type is any by default
     ctx.dataOut // type is any by default
 })
-.use(SetIOType<Buffer,string>())
+.use(ReformInput<Buffer>())
 .use(()=>ctx=>{
     ctx.dataIn // type is Buffer
-    ctx.dataOut // type is string
+    ctx.dataOut // type is any
 })
-.use(SetIOType<MyInType,MyOutType>())
+.use(ReformIO<string,string>(b=>b.toString()))
 .use(()=>ctx=>{
-    ctx.dataIn // type is MyInType
-    ctx.dataOut // type is MyOutType
+    ctx.dataIn // type is string
+    ctx.dataOut // type is string
 })
 ```
 ### 过滤消息种类 FilterEvent
@@ -378,6 +368,20 @@ SetContextType<"TI",MyClassA> //指定接收的数据格式为MyClassA
 SetContextType<"TO",MyClassB> //指定发送的数据格式为MyClassB
 SetContextType<"TIO",MyClassA,MyClassB> //指定接收的数据格式为MyClassA，发送的数据格式为MyClassB
 ```
+### 自动转发中间件
+此实例实现了一个收到消息后，自动转发给其他连接的功能。
+```typescript
+import { Knode,Konnection } from 'KonnectJS'
+let Transmit = defineMidware(function(){
+    return (ctx,next)=>{
+        if(ctx.eventType==="data"){
+            this.broadcast(ctx.conn,ctx.dataIn) //广播，除了ctx.conn
+        }
+        next()
+    }
+})
+```
+如上可以看到，如果使用`function() {}`形式传入defineMidware，在回调中可以通过this关键字取得Knode实例。
 ## 扩展自定义实现
 On the most time, you'll need `defineImpl` function.
 here is an example of websocket implement:
@@ -385,30 +389,43 @@ here is an example of websocket implement:
 import { WebSocketServer } from "ws"
 import { Konnection, defineImpl } from "./KonnectJS/Konnect"
 
-export let KonnectWS = defineImpl((wss:WebSocketServer)=>(node)=>{
-    wss.on("connection",ws=>{
+
+function setupWebSocket(ws:WebSocket,conn:Konnection){
+    ws.on("message",(data:Buffer)=>{
+        conn.emit("data",data)
+    })
+    ws.on("close",(code,reason)=>{
+        conn.emit("close",reason)
+    })
+    ws.on("error",err=>{
+        conn.emit("error",err)
+    })
+}
+
+export let KonnectWS = (defineImpl((wss?:WebSocketServer)=>(node)=>{
+    wss?.on("connection",ws=>{
         let conn = new Konnection(node,ws)
-        ws.on("message",(data:Buffer)=>{
-            conn.emit("data",data)
-        })
-        ws.on("close",(code,reason)=>{
-            conn.emit("close",{code,reason})
-        })
-        ws.on("error",err=>{
-            conn.emit("error",err)
-        })
+        setupWebSocket(ws,conn)
         node.emit("connection",conn)
     })
     return {
-        closeConnection(conn,code,reason){
-            conn.close(code,reason)
+        closeConnection(conn:WSConnection,reason){
+            conn.raw.close(reason?.code,reason?.reason)
             return true
         },
-        sendTo(conn:Konnection<WebSocket>,data) {
+        sendTo(conn:WSConnection,data) {
             conn.raw.send(data)
             return true
         },
+        connectTo(conn:WSConnection,addr){
+            conn.raw = new WebSocket(addr.url||"")
+            conn.raw.on("open",()=>{
+                node.emit("connection",conn)
+            })
+            setupWebSocket(conn.raw,conn)
+            return true
+        },
     }
-})
+})) 
 ```
 defineImpl 只是简单的返回原函数，但是会在代码编辑器中引入类型提示。

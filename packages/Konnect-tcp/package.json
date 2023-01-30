@@ -1,0 +1,30 @@
+{
+  "name": "konnect-tcp",
+  "version": "0.0.0",
+  "description": "a Konnection Impl for tcp protocol",
+  "author": "labbbirder <502100554@qq.com>",
+  "homepage": "https://github.com/labbbirder/KonnectJS#readme",
+  "license": "ISC",
+  "main": "dist/Konnect-tcp.js",
+  "directories": {
+    "lib": "lib",
+    "test": "__tests__"
+  },
+  "files": [
+    "lib"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/labbbirder/KonnectJS.git"
+  },
+  "scripts": {
+    "test": "node ./__tests__/Konnect-tcp.test.js",
+    "build":"tsc"
+  },
+  "bugs": {
+    "url": "https://github.com/labbbirder/KonnectJS/issues"
+  },
+  "dependencies": {
+    "konnectjs":"*"
+  }
+}

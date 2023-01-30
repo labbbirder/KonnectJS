@@ -40,7 +40,8 @@ interface ReshapedKoa{
     callback(): (eventType:string|symbol|number,ctx: Context) => void;
 }
 type MiddlewareFunction = (ctx:Context,next:Function)=>any
-interface ConnectionImpl{
+export interface ConnectionImpl{
+    raw?:any,
     sendTo:(conn:Konnection,data:any)=>boolean,
     closeConnection:(conn:Konnection,reason:any)=>boolean,
     connectTo?:(conn:Konnection,addr:Address)=>boolean,
@@ -118,6 +119,8 @@ type NormalizedKnodeType<T,TK extends Knode = Knode> = TK extends Knode<infer TI
     TK
 ):TK
 
+// type RestParamters<T> = T extends (h:any,...args: infer P)=>any? P:never;
+
 export class Knode<TI = any,TO = any> extends EventEmitter{
     connections:Konnection[]
     impl:ReturnType<ReturnType<ConnectionImplFactory>>
@@ -129,7 +132,7 @@ export class Knode<TI = any,TO = any> extends EventEmitter{
             this.connections.push(conn._setIndex(this.connections.length))
             let cb = conn._cb = conn.callback()
             conn.localNode = this
-            for(let fac of this.midwareFactories) conn.use(fac.func(...fac.args))
+            for(let fac of this.midwareFactories) conn.use(fac.func.call(this,...fac.args))
 
             conn.emit("connection",conn)
             cb("connection",{ conn })
@@ -181,8 +184,20 @@ export class Knode<TI = any,TO = any> extends EventEmitter{
         }
         return connections.send(data);
     }
-    broadcast(data:TO){
-        return this.sendTo(this.connections,data);
+    broadcast(data:TO):boolean;
+    broadcast(cull:Konnection,data:TO):boolean;
+    broadcast(cull:any,data?:any){
+        let targets = this.connections;
+        if(!!data && (cull instanceof Konnection)){
+            targets = targets.filter(c=>c!=cull)
+        }else{
+            data = cull;
+        }
+        return this.sendTo(targets,data);
+    }
+    ConnectTo(addr:Address,reason?:any){
+        let conn = new Konnection(this)
+        conn.connectTo(addr,reason)
     }
 }
 export interface Knode{
@@ -192,14 +207,10 @@ export interface Knode{
 export function defineImpl<T extends ConnectionImplFactory>(f:T){
     return f
 }
-export function defineMidware<T extends (...args:any[])=>MiddlewareFunction>(f:T):T{
+export function defineMidware<T extends (this:Knode,...args:any[])=>MiddlewareFunction>(f:T):T{
     return f
 }
 
-
-// export let SetIOType = <TI,TO>()=>defineMidware(()=>(_,next)=>{
-//     return next() as SetContextType<"TIO",TI,TO>
-// })
 export let ReformInput = defineMidware(<T>(f?:(d:any)=>T)=>(ctx,next)=>{
     if(ctx.eventType=="form"&&!!f){
         ctx.dataIn = f(ctx.dataIn)
@@ -224,18 +235,100 @@ export let ReformIO = defineMidware(<TI,TO=TI>(fi?:(d:any)=>TI,fo?:(d:any)=>TO)=
 })
 
 
-
-export let KonnectJSON = defineMidware((useUnform:boolean=true)=>{
-    return (ctx,next)=>{
-        if(ctx.eventType=="form"){
-            ctx.dataIn = JSON.parse(ctx.dataIn.toString())
-        }
-        if(ctx.eventType=="unform"){
-            if(useUnform) ctx.dataOut = JSON.stringify(ctx.dataOut)
-        }
-        return next() as SetContextType<"TIO",{[k:string]:any},{[k:string]:any}>
-    }
-})
+// export let KonnectJSON = defineMidware((useUnform:boolean=true)=>{
+//     return (ctx,next)=>{
+//         if(ctx.eventType=="form"){
+//             ctx.dataIn = JSON.parse(ctx.dataIn.toString())
+//         }
+//         if(ctx.eventType=="unform"){
+//             if(useUnform) ctx.dataOut = JSON.stringify(ctx.dataOut)
+//         }
+//         return next() as SetContextType<"TIO",{[k:string]:any},{[k:string]:any}>
+//     }
+// })
 export let FilterEvent = defineMidware((filter:EventType[],options?:{exlucde?:boolean})=>(ctx,next)=>{
     if(!~filter.indexOf(ctx.eventType)==!!options?.exlucde) next()
 })
+
+class UrlMetaData{
+    url:string
+    proto:string
+    host:string
+    port:string
+    path:string
+    username:string
+    _:string
+}
+export class UrlData extends UrlMetaData{
+    private static fromEntries(fields:(keyof InstanceType<typeof UrlMetaData>)[],regRes:string[]){
+        let url = new UrlData()
+        fields.forEach((k,i) => {
+            url[k] = regRes[i]
+        });
+        return url
+    }
+    get portNum(){
+        return parseInt(this.port||"0")
+    }
+    static create(url:string):UrlData|null{
+        const combineRegs = (...args:RegExp[])=>args.map(a=>a.source).join("")
+        const hostPattern = /([\w\.\u0100-\uffff]+|[\[\:\d\]]+)/
+        const portPattern = /(:(\d+|\w+))?/
+        const mode1 = [/^(\w*?)@/,hostPattern,portPattern,/(\/(.*))?$/]
+        const mode2 = [/^((\w+):\/\/)?/,hostPattern,portPattern,/(\/(.*))?$/]
+        let res
+        res = url.match(combineRegs(...mode1))
+        if(res){
+            return UrlData.fromEntries([
+                "url","username","host","_","port","_","path"
+            ],res)
+        }
+        res = url.match(combineRegs(...mode2))
+        if(res){
+            return UrlData.fromEntries([
+                "url","_","proto","host","_","port","_","path"
+            ],res)
+        }
+        return null
+    }
+    /**
+     * 
+     * @returns composed url
+     */
+    compose(){
+        let ret = ""
+
+        if(this.username){
+            ret+=this.username+"@"
+        }else{
+            if(this.proto) ret+=this.proto+"://"
+        }
+        ret+=this.host
+        if(this.port) ret+=":"+this.port
+        if(this.path) ret+="/"+this.path
+        this.url = ret
+        return ret
+    }
+}
+
+// export function ParseUrl(url:string):UrlData|null{
+//     const combineRegs = (...args:RegExp[])=>args.map(a=>a.source).join("")
+//     const hostPattern = /([\w\.\u0100-\uffff]+|[\[\:\d\]]+)/
+//     const portPattern = /(:(\d+|\w+))?/
+//     const mode1 = [/^(\w*?)@/,hostPattern,portPattern,/(\/(.*))?$/]
+//     const mode2 = [/^((\w+):\/\/)?/,hostPattern,portPattern,/(\/(.*))?$/]
+//     let res
+//     res = url.match(combineRegs(...mode1))
+//     if(res){
+//         return UrlData.create([
+//             "url","username","host","_","port","_","path"
+//         ],res)
+//     }
+//     res = url.match(combineRegs(...mode2))
+//     if(res){
+//         return UrlData.create([
+//             "url","_","proto","host","_","port","_","path"
+//         ],res)
+//     }
+//     return null
+// }

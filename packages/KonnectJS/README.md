@@ -82,9 +82,9 @@ import { Knode,Konnection } from 'KonnectJS'
 import { KonnectWS } from 'Konnect-ws'
 
 let node = new Knode()
-.setImpl(KonnectWS({ port:3000 })) // Immediately listen on 3000, and communicate with websocket
+.setImpl(KonnectWS({ port:3000,isServer:true })) // Immediately listen on 3000, and communicate with websocket
 .use(()=>ctx=>{
-    console.log("websocket message", ctx.eventType, ctx.data)
+    console.log("websocket event", ctx.eventType, ctx.dataIn)
 })
 ```
 ### Start A Tcp Server
@@ -93,15 +93,11 @@ the code below illustrates how a tcp server is created:
 import { Knode,Konnection } from 'KonnectJS'
 import { KonnectTCP } from 'Konnect-tcp'
 
-let wss = new WebSocketServer({
-    port: 3000
-})
-
 let node = new Knode()
 .use(()=>ctx=>{
-    console.log("tcp data", ctx.eventType, ctx.data)
+    console.log("tcp event", ctx.eventType, ctx.dataIn)
 })
-.setImpl(KonnectTCP({ port:3000 })) // the invoke order of setImpl does not matter
+.setImpl(KonnectTCP({ port:3000,isServer:true })) // the invoke order of setImpl does not matter
 ```
 ### Remember The Connection
 And you may want to know who the connection is, and want some code persistent for the same connection to be retrieved, here is the example:
@@ -109,17 +105,13 @@ And you may want to know who the connection is, and want some code persistent fo
 import { Knode,Konnection } from 'KonnectJS'
 import { KonnectTCP } from 'Konnect-tcp'
 
-let wss = new WebSocketServer({
-    port: 3000
-})
-
 let node = new Knode()
 .use(()=>{
     // for a new connection here...
     let session = {}
     let lastEventTime = 0
 
-    return ctx=>{ // the returned function is called every time the connection emits
+    return ctx=>{ // the returned function is called multiple times
         if(!!lastEventTime){
             console.log("i remember you", ctx.eventType, ctx.data)// we can retrieve here
             console.log("last message from you is on", lastEventTime)
@@ -130,7 +122,7 @@ let node = new Knode()
         lastEventTime = Date.now()
     }
 })
-.setImpl(KonnectTCP({ port:3000 })) 
+.setImpl(KonnectTCP({ port:3000,isServer:true })) 
 ```
 The scope of `let session = {}` is initialized the time as the connection established. The data under the scope is saved respectively.
 ### Run without Impl
@@ -139,8 +131,8 @@ this example shows how to drive it manually:
 import { Knode,Konnection } from 'KonnectJS'
 
 let node = new Knode()
-node.use((ctx)=>{
-    console.log(ctx.)
+node.use(()=>(ctx)=>{
+    console.log(ctx)
 })
 
 let conn = new Konnection(node)
@@ -154,9 +146,6 @@ And you may what to keep a standalone connection to another server with differen
 import { Knode,Konnection } from 'KonnectJS'
 import { KonnectTCP } from 'Konnect-tcp'
 
-let wss = new WebSocketServer({
-    port: 3000
-})
 let node = new Knode()
 .use(()=>{
     // for lots of client connections...
@@ -165,13 +154,13 @@ let node = new Knode()
         ctx.conn.send("you are a client")
     }
 })
-.setImpl(KonnectTCP({ port:3000 })) 
+.setImpl(KonnectTCP({ port:3000,isServer:true })) 
 
 let connA = new Konnection(node) // a standalone connection to an inner server
-connA.connectTo({host:"127.0.0.1",port:3001})
+connA.connectTo("localhost:3001")
 connA.use((ctx,next)=>{
-    if(ctx.data==="who am I"){
-        connA.send("you are gate server")
+    if(ctx.eventType==="connection"){
+        ctx.conn.send("hello, gate server")
     }
 })
 ```
@@ -184,16 +173,16 @@ const sleep = (ms:number)=>new Promise(res=>setTimeout(res,ms))
 
 let node = new Knode()
 node.setImpl(KonnectWS({ port:3000 })) 
-.use(async (ctx,next)=>{
+.use(()=>async (ctx,next)=>{
     console.log("start")
     await next()
     console.log("end")
 })
-.use(async (ctx,next)=>{
+.use(()=>async (ctx,next)=>{
     await sleep(3000)
     console.log("good")
 })
-.use(async (ctx,next)=>{
+.use(()=>async (ctx,next)=>{
     console.log("you wont see this")
 })
 
@@ -220,9 +209,9 @@ import { Knode,Konnection } from 'KonnectJS'
 import { KnonectJson } from 'KnonectJson'
 
 let node = new Knode()
-node.setImpl(KonnectWS({ port:3000 })) // use your midware
+node.setImpl(KonnectWS({ port:3000,isServer:true })) // use your midware
 .use(KnonectJson())
-.use(async (ctx,next)=>{
+.use(()=>async (ctx,next)=>{
     console.log("data in json", ctx.json)
 })
 
