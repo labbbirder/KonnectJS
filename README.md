@@ -39,7 +39,7 @@ In a common way, the very aims of KonnectJS are:
 * etc
 
 KonnectJS can help with scenes like:
-* network protocol is not determined currently, or will be switch in runtime
+* network protocol is not determined currently, or will be switched in runtime
 * upgrade application based on koa or express to a in-connection-network version.
 * finding a way to make bussiness code deeply decoupled
 * develop an in-connection-network application in koa/express way
