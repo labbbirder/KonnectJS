@@ -38,7 +38,7 @@ In a common way, the very aims of KonnectJS are:
 * make it possible to upgrade an existing project to fit with KonnectJS without too much effort
 * etc
 
-KonnectJS with help with scenes like:
+KonnectJS can help with scenes like:
 * network protocol is not determined currently, or will be switch in runtime
 * upgrade application based on koa or express to a in-connection-network version.
 * finding a way to make bussiness code deeply decoupled
