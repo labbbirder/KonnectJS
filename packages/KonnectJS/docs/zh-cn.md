@@ -5,9 +5,9 @@ KonnectJS 是一个非常灵活的基于结点和连接的抽象架构。专门�
 
 此项目尚处于开发中，这意味着：
 * 接口可能发生破坏性变化
-* 文档和教程错误
-* 部分未覆盖的用例无法通过
-* 存在bug和功能缺陷
+* 文档错误
+* 未覆盖的用例可能无法通过
+* 潜在的bug和功能缺陷
 
 目录
 <!-- vscode-markdown-toc -->
@@ -302,10 +302,10 @@ export let JsonParser = defineMidware((useUnform:boolean=true)=>async (ctx,next)
     if(ctx.eventType==="form"){ // reform a data from connection
         ctx.json = JSON.parse(ctx.dataIn)
     }
-    await next()
     if(ctx.eventType==="unform"){ // unform a data to connection
         if(useUnform) ctx.dataOut = JSON.stringify(ctx.dataOut)
     }
+    await next()
 })
 
 let node = new Knode()
@@ -368,6 +368,7 @@ SetContextType<"TI",MyClassA> //指定接收的数据格式为MyClassA
 SetContextType<"TO",MyClassB> //指定发送的数据格式为MyClassB
 SetContextType<"TIO",MyClassA,MyClassB> //指定接收的数据格式为MyClassA，发送的数据格式为MyClassB
 ```
+为了方便格式化IO，KonnectJS还提供了ReformInput、ReformOutput、ReformIO接口。
 ### 自动转发中间件
 此实例实现了一个收到消息后，自动转发给其他连接的功能。
 ```typescript
