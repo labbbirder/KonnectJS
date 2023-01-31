@@ -1,101 +1,152 @@
+import compose from 'koa-compose'
+import convert from 'koa-convert'
 import EventEmitter from 'events'
-import Koa from 'koa'
+import { isGeneratorFunction } from 'util/types'
+
 type EventType = "connection"|"data"|"error"|"close"|"form"|"unform"
-interface Context<TI = any,TO = any> {
+export interface Context<TI = any,TO = any> {
     conn:Konnection<TI,TO>,
     eventType?:EventType,
     error?:Error,
     dataIn?:TI,
     dataOut?:TO,
 }
-
 export interface Address{
-    // proto?:string,
-    // host?:string,
-    // port?:number,
     url?:string,
     [k:string]:any,
 }
-class ReshapedKoa extends Koa{
-    _cb:(eventType: string | number | symbol, ctx: Context) => void
-    //it not a public method, may be modified in the future
-    handleRequest<T>(ctx:T, fnMiddleware:(c:T)=>Promise<any>){
-        return fnMiddleware(ctx).then(()=>{
-            // if(ctx.dataToSend){
+enum ErrorCode{
+    UNKNOWN = 0,
+    CONNECT_FAIL,
+    CREATE_FAIL,
+    SEND_FAIL,
+    INVALID_DATA,
+    CLOSE_FAIL,
+    length
+}
 
-            // }
-        })//.catch(ctx.onerror)
-    }
-    createContext(eventType:any, ctx: any): any {
-        ctx.eventType = eventType
-        // ctx.send = ctx.conn.send
-        return ctx
-    }
-    callback(): (eventType:any, ctx: any) => void {
-        return super.callback() as any
-    }
-}
-interface ReshapedKoa{
-    createContext(eventType:string|symbol|number,ctx: Context): Context;
-    callback(): (eventType:string|symbol|number,ctx: Context) => void;
-}
 type MiddlewareFunction = (ctx:Context,next:Function)=>any
+type ConnectionImplFactory = (...args:any[])=>(node:Knode)=>ConnectionImpl
 export interface ConnectionImpl{
     raw?:any,
-    sendTo:(conn:Konnection,data:any)=>boolean,
-    closeConnection:(conn:Konnection,reason:any)=>boolean,
-    connectTo?:(conn:Konnection,addr:Address)=>boolean,
-    broadcast?:(data:any)=>boolean,
+    sendTo:(conn:Konnection,data:any)=>Promise<void>,
+    closeConnection:(conn:Konnection,reason:any)=>Promise<void>,
+    connectTo:(conn:Konnection,addr:Address)=>Promise<void>,
+    broadcast?:(data:any)=>Promise<void>,
+    shutdown?:()=>Promise<void>,
     [key:string]:any
 }
-type ConnectionImplFactory = (...args:any[])=>(n:Knode)=>ConnectionImpl
-export class Konnection<TI=any,TO=any,TRaw=any> extends ReshapedKoa{
-    _established:boolean
+type ConnectionStatus = "idle"|"connecting"|"established"
+export class Konnection<TI=any,TO=any,TRaw=any> extends EventEmitter{
+    // private 
+    _cb:(eventType: EventType, ctx: Context) => Promise<void>
+    // _established:boolean
+    middlewares:MiddlewareFunction[]
     _index:number;
     raw:TRaw;
     localNode:Knode;
-    get established(){
-        return this._established
+    remoteAddress:Address|Knode;
+    intend:"unknown"|"connect"|"close"
+
+    private _status:ConnectionStatus
+    
+    public get status() {
+        return this._status;
     }
+    public set status(v) {
+        this.emit("status",v,this._status)
+        this._status = v;
+    }
+    
+    get established(){
+        return this.status=="established"
+    }
+    /**
+     * create a konnection from a local knode, use its middlewares. if middlewares \
+     * asd changes later, call `refresh` manually to catch up.
+     * @param localNode 
+     * @param raw 
+     */
     constructor(localNode:Knode,raw?:TRaw){
-        super()
-        this._established = false
-        this.on("connection",()=>this._established = true)
-        this.on("close",()=>this._established = false)
+        super({captureRejections:false})
+        this.status = "idle"
+        this.intend = "unknown"
+        this.on("connection",()=>this.status = "established")
+        this.on("close",()=>this.status = "idle")
+        this.on("error",()=>{}) // disable Uncaught Message
         this.localNode = localNode
         this.raw = raw
+        this.refresh()
     }
-    // send(data:any){
-    //     this.localNode.impl.sendTo(this,data)
-    // }
-    send(formedData:TO):boolean{
+    /**
+     * refetch middlewares from local knode
+     */
+    refresh(){
+        this.middlewares = []
+        for(let fac of this.localNode.midwareFactories){
+            this.use(fac.func.call(this,...fac.args))
+        }
+        this._cb = this.callback()
+    }
+    use(fn:MiddlewareFunction){
+        if (typeof fn !== 'function') throw new TypeError('middleware must be a function!');
+        if (isGeneratorFunction(fn)) {
+            fn = convert(fn);
+        }
+        this.middlewares.push(fn)
+        return this
+    }
+    callback(){
+        let fn = compose(this.middlewares)
+        let cb = (eventType:EventType,ctx:Context)=>{
+            ctx.eventType = eventType
+            return fn(ctx)
+        }
+        return cb
+    }
+    async send(formedData:TO):Promise<boolean>{
         if(!this._cb) return false
         if(!this.established) return false
         let ctx = { conn:this, dataOut:formedData }
-        this._cb("unform",ctx)
-        return this.localNode.impl.sendTo(this,ctx.dataOut)
+        await this._cb("unform",ctx).finally()
+        await this.localNode.impl.sendTo(this,ctx.dataOut)
+        return true
     }
-    sendWithContext(ctx:Context){
+    async sendWithContext(ctx:Context){
         if(!this._cb) return false
         if(!this.established) return false
         // let context = { conn, dataOut:data }
-        this._cb("unform",ctx)
-        this.localNode.impl.sendTo(this,ctx.dataOut)
+        await this._cb("unform",ctx)
+        return this.localNode.impl.sendTo(this,ctx.dataOut)
     }
     close(reason?:any){
+        // this.remoteAddress = null
+        this.intend = "close"
         this.localNode.impl.closeConnection(this,reason)
     }
     connectTo(addr:Address,reason?:any){
-        if(this.established){
-            this.close()
-        }
-        this.localNode.impl.connectTo(this,addr)
+        return new Promise<void>((res,rej)=>{
+            if(this.established){
+                this.close()
+            }
+            this.status ="connecting"
+            this.intend = "connect"
+            this.remoteAddress = addr
+            this.localNode.impl.connectTo(this,addr).then(()=>{
+                // this.status = "established" // "connection" event is more convincing
+                res()
+            },()=>{
+                this.status = "idle"
+                rej()
+            })
+        })
     }
     _setIndex(idx:number){
         this._index = idx
         return this
     }
 }
+
 export interface Konnection{
     on(event:"connection",f:(conn:Konnection)=>any):this;
     on(event:"data",f:(data:any)=>any):this;
@@ -103,6 +154,7 @@ export interface Konnection{
     // on(event:"unform",f:(data:any)=>any):this;
     on(event:"close",f:(data:any)=>any):this;
     on(event:"error",f:(err:Error)=>any):this;
+    on(event:"status",f:(status:ConnectionStatus,prev:ConnectionStatus)=>any):this;
 
     emit(event:"connection",conn:Konnection):boolean;
     emit(event:"data",data:any):boolean;
@@ -110,12 +162,14 @@ export interface Konnection{
     // emit(event:"unform",data:any):boolean;
     emit(event:"close",data:any):boolean;
     emit(event:"error",err:Error):boolean;
+    emit(event:"status",status:ConnectionStatus,prev:ConnectionStatus):boolean;
 }
 export type SetContextType<K extends "TI"|"TO"|"TIO",T1,T2=any> = {_:K}
+type SetContextTypeLike<K extends "TI" | "TO" | "TIO",T1,T2=any> = SetContextType<K,T1,T2>|Promise<SetContextType<K,T1,T2>>
 type NormalizedKnodeType<T,TK extends Knode = Knode> = TK extends Knode<infer TI,infer TO>?(
-    T extends SetContextType<"TI",infer TI>? Knode<TI,TO>:
-    T extends SetContextType<"TO",infer TO>? Knode<TI,TO>:
-    T extends SetContextType<"TIO",infer TI,infer TO>? Knode<TI,TO>:
+    T extends SetContextTypeLike<"TI",infer TI>? Knode<TI,TO>:
+    T extends SetContextTypeLike<"TO",infer TO>? Knode<TI,TO>:
+    T extends SetContextTypeLike<"TIO",infer TI,infer TO>? Knode<TI,TO>:
     TK
 ):TK
 
@@ -123,27 +177,36 @@ type NormalizedKnodeType<T,TK extends Knode = Knode> = TK extends Knode<infer TI
 
 export class Knode<TI = any,TO = any> extends EventEmitter{
     connections:Konnection[]
-    impl:ReturnType<ReturnType<ConnectionImplFactory>>
+    impl:ConnectionImpl
     midwareFactories:{func:(...args:any[])=>MiddlewareFunction,args:any[]}[] = []
     constructor(){
         super()
         this.connections = []
         this.on("connection",conn=>{
             this.connections.push(conn._setIndex(this.connections.length))
-            let cb = conn._cb = conn.callback()
             conn.localNode = this
-            for(let fac of this.midwareFactories) conn.use(fac.func.call(this,...fac.args))
+            // for(let fac of this.midwareFactories){
+            //     conn.use(fac.func.call(conn,...fac.args))
+            // }
+            let cb = conn._cb
 
             conn.emit("connection",conn)
             cb("connection",{ conn })
             conn.on("data",dataIn=>{
                 let ctx:Context<TI,TO> = { conn, dataIn }
-                cb("form",ctx)
-                cb("data",ctx)
+                cb("form",ctx).then(()=>cb("data",ctx))
             }).on("close",dataIn=>{
                 let taridx = conn._index
-                let tail = this.connections.pop()._setIndex(conn._index)
-                if(this.connections.length!=taridx){
+                if(this.connections[conn._index]!=conn){
+                    return
+                }
+                if(taridx<0||taridx>=this.connections.length){
+                    throw Error("remove connection of an invalid index")
+                }
+                if(this.connections.length==taridx+1){
+                    this.connections.pop()
+                }else{
+                    let tail = this.connections.pop()._setIndex(taridx)
                     this.connections[taridx] = tail
                 }
                 // this.connections[conn._index] = this.connections.pop()._setIndex(conn._index)
@@ -159,33 +222,29 @@ export class Knode<TI = any,TO = any> extends EventEmitter{
     }
     use<
         // NTI=TI, NTO=TO,
-        T extends (...args:any[])=>(ctx:Context<TI,TO>,next:Function)=>any,
+        T extends (this:Konnection,...args:any[])=>(ctx:Context<TI,TO>,next:Function)=>any,
         K extends Knode=Knode<TI,TO>
     >(func?:T,...args:Parameters<T>):NormalizedKnodeType<ReturnType<ReturnType<T>>,K>{
         if(!!func)this.midwareFactories.push({func,args})
         return this as any
     }
-    ioType<NTI,NTO>(){
-        return this as any as Knode<NTI,NTO>
-    }
+    // ioType<NTI,NTO>(){
+    //     return this as any as Knode<NTI,NTO>
+    // }
     private isConnectionArray(conn:any):conn is Konnection[]{
         return conn instanceof Array
     }
-    sendTo(conn:Konnection,data:TO):boolean;
-    sendTo(connections:Konnection[],data:TO):boolean;
-    sendTo(connections:any,data:any){
-        let res = true
+    sendTo(conn:Konnection,data:TO):Promise<boolean>;
+    sendTo(connections:Konnection[],data:TO):Promise<boolean>;
+    async sendTo(connections:any,data:any){
         if(this.isConnectionArray(connections)){
-            for(let conn of connections){
-                let r = conn.send(data)
-                res &&= r
-            }
-            return res
+            let results = await Promise.allSettled(connections.map(c=>c.send(data)))
+            return results.reduce((a,b)=>a&&b)
         }
-        return connections.send(data);
+        return await connections.send(data);
     }
-    broadcast(data:TO):boolean;
-    broadcast(cull:Konnection,data:TO):boolean;
+    broadcast(data:TO):Promise<boolean>;
+    broadcast(cull:Konnection,data:TO):Promise<boolean>;
     broadcast(cull:any,data?:any){
         let targets = this.connections;
         if(!!data && (cull instanceof Konnection)){
@@ -195,9 +254,10 @@ export class Knode<TI = any,TO = any> extends EventEmitter{
         }
         return this.sendTo(targets,data);
     }
-    ConnectTo(addr:Address,reason?:any){
+    ConnectTo(addr:Address,reason?:any):Konnection{
         let conn = new Konnection(this)
         conn.connectTo(addr,reason)
+        return conn
     }
 }
 export interface Knode{
@@ -207,31 +267,32 @@ export interface Knode{
 export function defineImpl<T extends ConnectionImplFactory>(f:T){
     return f
 }
-export function defineMidware<T extends (this:Knode,...args:any[])=>MiddlewareFunction>(f:T):T{
+export function defineMidware<T extends (this:Konnection,...args:any[])=>MiddlewareFunction>(f:T):T{
     return f
 }
 
-export let ReformInput = defineMidware(<T>(f?:(d:any)=>T)=>(ctx,next)=>{
-    if(ctx.eventType=="form"&&!!f){
-        ctx.dataIn = f(ctx.dataIn)
+export let ReformInput = defineMidware(<T>(opt:{former?:(d:any)=>T}={})=>(ctx,next)=>{
+    if(ctx.eventType==="form"&&!!opt.former){
+        ctx.dataIn = opt.former(ctx.dataIn)
     }
     return next() as SetContextType<"TI",T>
 })
-export let ReformOutput = defineMidware(<T>(f?:(d:any)=>T)=>(ctx,next)=>{
-    if(ctx.eventType=="unform"&&!!f){
-        ctx.dataOut = f(ctx.dataOut)
+export let ReformOutput = defineMidware(<T>(opt:{unformer?:(d:T)=>any} = {})=>async(ctx,next)=>{
+    await next()
+    if(ctx.eventType==="unform"&&!!opt.unformer){
+        ctx.dataOut = opt.unformer(ctx.dataOut)
     }
-    return next() as SetContextType<"TO",T>
+    return null as SetContextType<"TO",T>
 })
-export let ReformIO = defineMidware(<TI,TO=TI>(fi?:(d:any)=>TI,fo?:(d:any)=>TO)=>(ctx,next)=>{
-    fo||=fi as any;
-    if(ctx.eventType=="form"&&!!fi){
-        ctx.dataIn = fi(ctx.dataIn)
+export let ReformIO = defineMidware(<TI,TO=TI>(opt:{former?:(d:any)=>TI,unformer?:(d:TO)=>any}={})=>async(ctx,next)=>{
+    if(ctx.eventType==="form"&&!!opt.former){
+        ctx.dataIn = opt.former(ctx.dataIn)
     }
-    if(ctx.eventType=="unform"&&!!fo){
-        ctx.dataOut = fo(ctx.dataOut)
+    await next()
+    if(ctx.eventType==="unform"&&!!opt.unformer){
+        ctx.dataOut = opt.unformer(ctx.dataOut)
     }
-    return next() as SetContextType<"TIO",TI,TO>
+    return null as SetContextType<"TIO",TI,TO>
 })
 
 
@@ -246,8 +307,9 @@ export let ReformIO = defineMidware(<TI,TO=TI>(fi?:(d:any)=>TI,fo?:(d:any)=>TO)=
 //         return next() as SetContextType<"TIO",{[k:string]:any},{[k:string]:any}>
 //     }
 // })
+
 export let FilterEvent = defineMidware((filter:EventType[],options?:{exlucde?:boolean})=>(ctx,next)=>{
-    if(!~filter.indexOf(ctx.eventType)==!!options?.exlucde) next()
+    if(!(~filter.indexOf(ctx.eventType))==!!(options?.exlucde)) next()
 })
 
 class UrlMetaData{
@@ -332,3 +394,37 @@ export class UrlData extends UrlMetaData{
 //     }
 //     return null
 // }
+const sleep = (ms:number)=>new Promise(res=>setTimeout(res,ms))
+// async function Foo(p:number) {
+//     console.log(p,"start")
+//     await sleep(1000)
+//     console.log(p,"end")
+//     return 1
+// }
+// ;(async function(){
+//     await Promise.allSettled([1,2,3,4,5].map(v=>Foo(v)))
+//     console.log("all end")
+// })()
+
+// let node = new Knode()
+// .use(()=>async(ctx,next)=>{
+//     console.log(1)
+//     await sleep(100)
+//     await next()
+//     await sleep(100)
+//     console.log(6)
+// }).use(()=>async(ctx,next)=>{
+//     console.log(2)
+//     await sleep(100)
+//     await next()
+//     await sleep(100)
+//     console.log(5)
+// }).use(()=>async(ctx,next)=>{
+//     console.log(3)
+//     await sleep(100)
+//     await next()
+//     await sleep(100)
+//     console.log(4)
+// })
+
+// node.emit("connection",new Konnection(node))

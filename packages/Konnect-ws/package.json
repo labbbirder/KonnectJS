@@ -10,8 +10,10 @@
   "author": "labbbirder",
   "license": "ISC",
   "dependencies": {
-    "ws": "^8.12.0",
-    "konnectjs": "*"
+    "bl": "^6.0.0",
+    "koa-convert": "^2.0.0",
+    "konnectjs": "*",
+    "ws": "^8.12.0"
   },
   "devDependencies": {
     "@types/ws": "^8.5.4"

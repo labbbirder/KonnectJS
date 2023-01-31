@@ -1,4 +1,4 @@
-import { defineImpl, defineMidware, Konnection,UrlData } from "KonnectJS";
+import { defineImpl, defineMidware, Knode, Konnection,ReformIO,UrlData } from "KonnectJS";
 import * as net from 'net'
 
 type Options = Partial<{
@@ -8,6 +8,7 @@ type Options = Partial<{
     // ttl:number,
 }>
 type Connection = Konnection<Buffer,Buffer,net.Socket>
+
 function setupConnection(conn:Connection,socket:net.Socket){
     socket.on("data",data=>{
         conn.emit("data",data)
@@ -16,12 +17,10 @@ function setupConnection(conn:Connection,socket:net.Socket){
         conn.emit("close",hasError)
     })
     socket.on("error",err=>{
-        if(err.message==="read ECONNRESET"){
-            return socket.destroy()
-        }
         conn.emit("error",err)
     })
 }
+
 export let KonnectTCP = defineImpl((options:Options={})=>node=>{
     options = {
         isServer:false,
@@ -39,22 +38,26 @@ export let KonnectTCP = defineImpl((options:Options={})=>node=>{
 
     return {
         sendTo(conn:Connection, data) {
-            if(!conn.raw.writable) return false
-            return conn.raw.write(data)
+            if(!conn.raw.writable) return Promise.reject()
+            conn.raw.write(data)
+            return Promise.resolve()
         },
-        connectTo(conn:Connection, addr) {
+        connectTo:(conn:Connection, addr)=>new Promise((res,rej)=> {
             let url = UrlData.create(addr.url||"")
-            if(!url) return false
+            if(!url) return rej()
             conn.raw = net.createConnection(url.portNum,url.host)
             conn.raw.on("connect",()=>{
                 node.emit("connection",conn)
             })
+            conn.raw.on("error",err=>{
+                if("connect"===(err as any)?.syscall) rej()
+            })
             setupConnection(conn,conn.raw)
-            return true
-        },
+            res()
+        }),
         closeConnection(conn:Connection, reason) {
             conn.raw.end()
-            return true
+            return Promise.resolve()
         },
     }
 })

@@ -7,14 +7,14 @@ type Connection = Konnection<any,any,Raw>
 export let KonnectLocal = defineImpl(()=>node=>{
     return {
         sendTo(conn:Connection, data) {
-            if(conn.raw.remote==null) return false
+            if(conn.raw.remote==null) return Promise.reject()
             conn.raw.remote.emit("data",data)
-            return true
+            return Promise.resolve()
         },
         closeConnection(conn:Connection, reason) {
             conn.raw.remote?.emit("close",reason)
             conn.raw.remote = null
-            return true
+            return Promise.resolve()
         },
         connectTo(conn:Connection, addr) {
             if(!(addr instanceof Knode)) {
@@ -27,9 +27,9 @@ export let KonnectLocal = defineImpl(()=>node=>{
 
                 conn.raw = {remote:rmtConn as any}
                 node.emit("connection",conn)
-                return true
+                return Promise.resolve()
             }
-            return false
+            return Promise.reject()
         },
         
     }

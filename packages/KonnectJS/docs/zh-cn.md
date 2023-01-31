@@ -180,7 +180,7 @@ let node = new Knode()
 .setImpl(KonnectTCP({ port:3000 })) 
 
 let connA = new Konnection(node) // 到内部服务器的独立连接
-connA.connectTo({host:"127.0.0.1",port:3001})
+connA.connectTo({url:"127.0.0.1:3001"})
 connA.use((ctx,next)=>{
     if(ctx.data==="who am I"){
         connA.send("you are gate server")
@@ -341,10 +341,11 @@ let KonnectJSON = defineMidware((useUnform:boolean=true)=>{
         if(ctx.eventType=="form"){
             ctx.dataIn = JSON.parse(ctx.dataIn.toString())
         }
+        await next()
         if(ctx.eventType=="unform"){
             if(useUnform) ctx.dataOut = JSON.stringify(ctx.dataOut)
         }
-        return next() as SetContextType<"TIO",InCommingJson,OutCommingJson>
+        return null as SetContextType<"TIO",InCommingJson,OutCommingJson>
     }
 })
 

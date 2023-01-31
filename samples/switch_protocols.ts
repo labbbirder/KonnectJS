@@ -29,7 +29,10 @@ export function startServer(){
     let globalClientID = 0
     let node = new Knode()
     .setImpl(NETWORK_IMPLEMENT.server)
-    .use(ReformIO<string>, b=>b.toString())
+    .use(ReformIO<string>, { // reform network io from Buffer to string
+        former:b=>b.toString(),
+        unformer:s=>Buffer.from(s),
+    })
     .use(()=>{
         globalClientID+=1
         let id = globalClientID
@@ -50,7 +53,10 @@ export function startServer(){
 export function startClient(){
     let node = new Knode()
     .setImpl(NETWORK_IMPLEMENT.client)
-    .use(ReformIO<string>, b=>b.toString())
+    .use(ReformIO<string>, { // reform network io from Buffer to string
+        former:b=>b.toString(),
+        unformer:s=>Buffer.from(s),
+    })
     .use(FilterEvent,["data"])
     .use(()=>ctx=>console.log(ctx.dataIn))
 

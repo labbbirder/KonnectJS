@@ -34,22 +34,26 @@ export let KonnectWS = (defineImpl((opt:Options = {})=>(node)=>{
         raw:wss,
         closeConnection(conn:WSConnection,reason){
             conn.raw.close(reason?.code,reason?.reason)
-            return true
+            return Promise.resolve()
         },
         sendTo(conn:WSConnection,data) {
             conn.raw.send(data)
-            return true
+            return Promise.resolve()
         },
-        connectTo(conn:WSConnection,addr){
+        connectTo: (conn:WSConnection,addr)=>new Promise((res,rej)=>{
             let url = UrlData.create(addr.url||"")
-            if(!url) return false
+            if(!url) return rej()
             url.proto = "ws"
             conn.raw = new WebSocket(url.compose())
             conn.raw.on("open",()=>{
                 node.emit("connection",conn)
             })
+            conn.raw.on("error",err=>{
+                if("connect"===(err as any)?.syscall) rej()
+            })
             setupWebSocket(conn.raw,conn)
-            return true
-        },
+            res()
+        }),
+        
     }
 }))

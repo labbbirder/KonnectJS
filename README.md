@@ -91,6 +91,7 @@ See full document [here](packages/KonnectJS/README.md)
 
 there are alse samples [here](samples):
 * chat - a simple chat room with websock server and client
-* simple - a simple transmitter between knodes
 * switch_protocols - a chat room, but can swtich with varied protocols
+* chat2 - a chat room, but with packet split, autoreconnect, heartbeat strategies
+* simple - a simple transmitter between knodes
 

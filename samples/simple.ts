@@ -20,13 +20,12 @@ let A = createNode("Node A"),
     C = createNode("Node C"),
     D = createNode("Node D");
 
-let B2A = new Konnection(B)
 
 
 B.use(FilterEvent,["data"])
 .use(function(){
     return ctx=>{
-        this.broadcast(B2A,ctx.dataIn) //向后转发
+        this.localNode.broadcast(B2A,ctx.dataIn) //向后转发
     }
 })
 
@@ -36,10 +35,11 @@ B.use(FilterEvent,["data"])
  *          -- D
  */
 
+
+let B2A = new Konnection(B)
 B2A.connectTo(A)
 // A.ConnectTo(B)
 B.ConnectTo(C)
 B.ConnectTo(D)
-
 A.broadcast("hello, from A")
 // console.log(B,C)

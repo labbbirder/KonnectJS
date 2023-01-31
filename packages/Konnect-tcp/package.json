@@ -19,12 +19,14 @@
   },
   "scripts": {
     "test": "node ./__tests__/Konnect-tcp.test.js",
-    "build":"tsc"
+    "build": "tsc"
   },
   "bugs": {
     "url": "https://github.com/labbbirder/KonnectJS/issues"
   },
   "dependencies": {
-    "konnectjs":"*"
+    "bl": "^6.0.0",
+    "koa-convert": "^2.0.0",
+    "konnectjs": "*"
   }
 }
