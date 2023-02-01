@@ -56,12 +56,7 @@ export function startClient(){
         timeout:1500
     })
     .use(ReformIO<string>, { // reform network io
-        former:b=>{
-            console.log("form",b)
-            let ret = b.toString()
-            console.log("form end",ret)
-            return ret
-        },
+        former:b=>b.toString(),
         unformer:s=>Buffer.from(s),
     })
     .use(FilterEvent,["data"])

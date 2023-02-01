@@ -194,7 +194,9 @@ export class Knode<TI = any,TO = any> extends EventEmitter{
             cb("connection",{ conn })
             conn.on("data",dataIn=>{
                 let ctx:Context<TI,TO> = { conn, dataIn }
-                cb("form",ctx).then(()=>cb("data",ctx))
+                cb("form",ctx).then(()=>{
+                    if(ctx.dataIn!==undefined) cb("data",ctx)
+                })
             }).on("close",dataIn=>{
                 let taridx = conn._index
                 if(this.connections[conn._index]!=conn){
@@ -239,7 +241,7 @@ export class Knode<TI = any,TO = any> extends EventEmitter{
     async sendTo(connections:any,data:any){
         if(this.isConnectionArray(connections)){
             let results = await Promise.allSettled(connections.map(c=>c.send(data)))
-            return results.reduce((a,b)=>a&&b)
+            return results.length && results.reduce((a,b)=>a&&b)
         }
         return await connections.send(data);
     }

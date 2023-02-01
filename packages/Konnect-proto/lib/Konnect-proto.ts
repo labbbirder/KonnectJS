@@ -207,12 +207,14 @@ export let KonnectHeartbeat = defineMidware(function(opt:HeartbeatOption={}){
             if (ctx.dataIn[0] == HeartbeatMessage.PING) {
                 if (ctx.dataIn.length == 1) { // got ping
                     await this.send(bufPong)
+                    ctx.dataIn = undefined
                     return
                 } else {
                     ctx.dataIn = ctx.dataIn.subarray(1)
                 }
             } else if (ctx.dataIn[0] == HeartbeatMessage.PONG) {
                 if (ctx.dataIn.length == 1) { // got pong
+                    ctx.dataIn = undefined
                     // console.log("get pong")
                     return
                 } else {
