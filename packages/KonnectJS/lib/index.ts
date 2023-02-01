@@ -4,6 +4,16 @@ import EventEmitter from 'events'
 import { isGeneratorFunction } from 'util/types'
 
 type EventType = "connection"|"data"|"error"|"close"|"form"|"unform"
+interface KMetadata{
+    setMetadata(key:"pack-type",value:"unknown|stream|packet"):void;
+    setMetadata(key:"heartbeat",value:"unknown|no|yes"):void;
+    setMetadata(key:"no-delay",value:"unknown|no|yes"):void;
+    setMetadata(key:"reliable",value:"unknown|no|yes"):void;
+    setMetadata(key:"ordered",value:"unknown|no|yes"):void;
+    setMetadata(key:"connection-based",value:"unknown|no|yes"):void;
+    setMetadata(key:"raw-protocol",value:string):void;
+    setMetadata(key:string,value:any):void;
+}
 export interface Context<TI = any,TO = any> {
     conn:Konnection<TI,TO>,
     eventType?:EventType,
@@ -37,19 +47,29 @@ export interface ConnectionImpl{
     [key:string]:any
 }
 type ConnectionStatus = "idle"|"connecting"|"established"
+
+
+const kSetIndex = Symbol()
+const kGetIndex = Symbol()
+const kCallback = Symbol()
+
+
 export class Konnection<TI=any,TO=any,TRaw=any> extends EventEmitter{
     // private 
-    _cb:(eventType: EventType, ctx: Context) => Promise<void>
     // _established:boolean
     middlewares:MiddlewareFunction[]
-    _index:number;
     raw:TRaw;
     localNode:Knode;
     remoteAddress:Address|Knode;
     intend:"unknown"|"connect"|"close"
 
+    private _cb:(eventType: EventType, ctx: Context) => Promise<void>
+    private _index:number;
     private _status:ConnectionStatus
     
+    public get [kCallback]() {
+        return this._cb;
+    }
     public get status() {
         return this._status;
     }
@@ -58,6 +78,13 @@ export class Konnection<TI=any,TO=any,TRaw=any> extends EventEmitter{
         this._status = v;
     }
     
+    [kSetIndex](idx:number){
+        this._index = idx
+        return this
+    }
+    [kGetIndex](){
+        return this._index
+    }
     get established(){
         return this.status=="established"
     }
@@ -141,10 +168,6 @@ export class Konnection<TI=any,TO=any,TRaw=any> extends EventEmitter{
             })
         })
     }
-    _setIndex(idx:number){
-        this._index = idx
-        return this
-    }
 }
 
 export interface Konnection{
@@ -183,12 +206,12 @@ export class Knode<TI = any,TO = any> extends EventEmitter{
         super()
         this.connections = []
         this.on("connection",conn=>{
-            this.connections.push(conn._setIndex(this.connections.length))
+            this.connections.push(conn[kSetIndex](this.connections.length))
             conn.localNode = this
             // for(let fac of this.midwareFactories){
             //     conn.use(fac.func.call(conn,...fac.args))
             // }
-            let cb = conn._cb
+            let cb = conn[kCallback]
 
             conn.emit("connection",conn)
             cb("connection",{ conn })
@@ -198,8 +221,8 @@ export class Knode<TI = any,TO = any> extends EventEmitter{
                     if(ctx.dataIn!==undefined) cb("data",ctx)
                 })
             }).on("close",dataIn=>{
-                let taridx = conn._index
-                if(this.connections[conn._index]!=conn){
+                let taridx = conn[kGetIndex]()
+                if(this.connections[taridx]!=conn){
                     return
                 }
                 if(taridx<0||taridx>=this.connections.length){
@@ -208,7 +231,7 @@ export class Knode<TI = any,TO = any> extends EventEmitter{
                 if(this.connections.length==taridx+1){
                     this.connections.pop()
                 }else{
-                    let tail = this.connections.pop()._setIndex(taridx)
+                    let tail = this.connections.pop()[kSetIndex](taridx)
                     this.connections[taridx] = tail
                 }
                 // this.connections[conn._index] = this.connections.pop()._setIndex(conn._index)
