@@ -1,6 +1,6 @@
 {
   "name": "konnect-proto",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "network utils for KonnectJS",
   "author": "labbbirder <502100554@qq.com>",
   "homepage": "https://github.com/labbbirder/KonnectJS#readme",
@@ -27,7 +27,7 @@
   "dependencies": {
     "bl": "^6.0.0",
     "koa-convert": "^2.0.0",
-    "konnectjs": "^0.1.0"
+    "konnectjs": "^0.1.1"
   },
   "gitHead": "977e046daa7dbf669b8a6c6a8d153fb22e477358"
 }
