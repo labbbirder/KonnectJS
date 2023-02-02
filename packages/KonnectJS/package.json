@@ -3,6 +3,7 @@
   "version": "0.1.1",
   "description": "An extremely flexible abstraction of node-connections structure, which designed for keep-in-connection using, can be fit with any type of network protocol",
   "main": "dist/index.js",
+  "files": ["dist/**/*.js","dist/**/*.d.ts"],
   "scripts": {
     "test": "jest",
     "build": "tsc"

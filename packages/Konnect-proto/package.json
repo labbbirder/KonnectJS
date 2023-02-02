@@ -5,14 +5,10 @@
   "author": "labbbirder <502100554@qq.com>",
   "homepage": "https://github.com/labbbirder/KonnectJS#readme",
   "license": "ISC",
-  "main": "dist/Konnect-proto.js",
-  "directories": {
-    "lib": "dist",
-    "test": "__tests__"
-  },
-  "files": [
-    "lib"
-  ],
+  "main": "dist/konnect-proto.js",
+
+  "files": ["dist/**/*.js","dist/**/*.d.ts"],
+  
   "repository": {
     "type": "git",
     "url": "git+https://github.com/labbbirder/KonnectJS.git"

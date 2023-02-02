@@ -1,7 +1,7 @@
-import { FilterEvent, Knode, Konnection, ReformIO, DebugEvent } from "KonnectJS";
-// import { KonnectWS } from "../packages/Konnect-ws";
-import { KonnectSplit,KonnectReconnect,KonnectHeartbeat } from "Konnect-proto";
-import { KonnectTCP } from "Konnect-tcp";
+import { FilterEvent, Knode, Konnection, ReformIO, DebugEvent } from "konnectjs";
+// import { KonnectWS } from "../packages/konnect-ws";
+import { KonnectSplit,KonnectReconnect,KonnectHeartbeat } from "konnect-proto";
+import { KonnectTCP } from "konnect-tcp";
 import { logger } from "./common/logger";
 export * from './common/types'
 
