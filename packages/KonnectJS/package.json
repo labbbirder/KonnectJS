@@ -30,7 +30,7 @@
   "dependencies": {
     "bl": "^6.0.0",
     "events": "^3.3.0",
-    "koa": "2.14.1",
+    "koa-compose": "^4.1.0",
     "koa-convert": "^2.0.0",
     "ts-log": "^2.2.5"
   },
