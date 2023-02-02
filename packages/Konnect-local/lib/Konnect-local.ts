@@ -1,4 +1,4 @@
-import { defineImpl,Knode,Konnection } from "KonnectJS";
+import { defineImpl,Knode,Konnection } from "konnectjs";
 type Raw = {
     remote:Connection|null
 }

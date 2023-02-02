@@ -1,5 +1,5 @@
 import { WebSocket, WebSocketServer } from "ws"
-import { defineImpl, UrlData, Konnection } from "KonnectJS"
+import { defineImpl, UrlData, Konnection } from "konnectjs"
 
 function setupWebSocket(ws:WebSocket,conn:Konnection){
     ws.on("message",(data:Buffer)=>{

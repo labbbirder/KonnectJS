@@ -13,11 +13,11 @@
   ],
   "dependencies": {
     "chalk": "4.1.2",
-    "konnect-local": "./packages/Konnect-local",
-    "konnect-proto": "./packages/Konnect-proto",
-    "konnect-tcp": "./packages/Konnect-tcp",
-    "konnect-ws": "./packages/Konnect-ws",
-    "konnectjs": "./packages/KonnectJS",
+    "konnect-local": "./packages/konnect-local",
+    "konnect-proto": "./packages/konnect-proto",
+    "konnect-tcp": "./packages/konnect-tcp",
+    "konnect-ws": "./packages/konnect-ws",
+    "konnectjs": "./packages/konnectjs",
     "log4js": "^6.7.1",
     "ts-log": "^2.2.5",
     "ws": "^8.12.0"

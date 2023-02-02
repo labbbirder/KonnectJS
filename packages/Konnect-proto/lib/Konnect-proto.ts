@@ -1,7 +1,7 @@
 // import { defineMidware } from "Konnect";
 
 import { BufferList } from "bl";
-import { defineMidware, Kontext } from "KonnectJS";
+import { defineMidware, Kontext } from "konnectjs";
 const sleep = (ms:number)=>new Promise(res=>setTimeout(res,ms))
 type ReconnectOptions = Partial<{
     /**

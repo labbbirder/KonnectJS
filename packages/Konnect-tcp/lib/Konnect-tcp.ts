@@ -1,4 +1,4 @@
-import { defineImpl, defineMidware, Knode, Konnection,ReformIO,UrlData } from "KonnectJS";
+import { defineImpl, Konnection,UrlData } from "konnectjs";
 import * as net from 'net'
 
 type Options = Partial<{
