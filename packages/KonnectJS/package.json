@@ -1,6 +1,6 @@
 {
   "name": "konnectjs",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "An extremely flexible abstraction of node-connections structure, which designed for keep-in-connection using, can be fit with any type of network protocol",
   "main": "dist/index.js",
   "scripts": {
@@ -40,7 +40,5 @@
     "@types/koa-convert": "^1.2.4",
     "@types/node": "^18.11.18",
     "ts-jest": "^29.0.5"
-  },
-  "peerDependencies": {
   }
 }
