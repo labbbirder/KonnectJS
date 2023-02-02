@@ -94,10 +94,10 @@ import { Knode,Konnection } from 'KonnectJS'
 import { KonnectTCP } from 'Konnect-tcp'
 
 let node = new Knode()
+.setImpl(KonnectTCP({ port:3000,isServer:true }))
 .use(()=>ctx=>{
     console.log("tcp event", ctx.eventType, ctx.dataIn)
 })
-.setImpl(KonnectTCP({ port:3000,isServer:true })) // the invoke order of setImpl does not matter
 ```
 ### Remember The Connection
 And you may want to know who the connection is, and want some code persistent for the same connection to be retrieved, here is the example:
@@ -106,6 +106,7 @@ import { Knode,Konnection } from 'KonnectJS'
 import { KonnectTCP } from 'Konnect-tcp'
 
 let node = new Knode()
+.setImpl(KonnectTCP({ port:3000,isServer:true })) 
 .use(()=>{
     // for a new connection here...
     let session = {}
@@ -122,7 +123,6 @@ let node = new Knode()
         lastEventTime = Date.now()
     }
 })
-.setImpl(KonnectTCP({ port:3000,isServer:true })) 
 ```
 The scope of `let session = {}` is initialized the time as the connection established. The data under the scope is saved respectively.
 ### Run without Impl
@@ -157,7 +157,7 @@ let node = new Knode()
 .setImpl(KonnectTCP({ port:3000,isServer:true })) 
 
 let connA = new Konnection(node) // a standalone connection to an inner server
-connA.connectTo("localhost:3001")
+connA.connectTo({url:"localhost:3001"})
 connA.use((ctx,next)=>{
     if(ctx.eventType==="connection"){
         ctx.conn.send("hello, gate server")
@@ -198,9 +198,9 @@ interface Context{ // declaration here
 ```typescript
 // how it transforms
 let KnonectJson = defineMidware((options?:any)=>async (ctx,next)=>{
-    ctx.json = JSON.parse(ctx.rawData)
+    ctx.json = JSON.parse(ctx.dataIn)
     await next()
-    ctx.respData = JSON.stringify(ctx.respData)
+    ctx.dataOut?.map(o=>JSON.stringify(o))
 })
 ```
 defineMidware does nothing but return the origin function. Coders can benefit from it by code autocompletion

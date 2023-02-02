@@ -40,5 +40,6 @@
     "@types/koa-convert": "^1.2.4",
     "@types/node": "^18.11.18",
     "ts-jest": "^29.0.5"
-  }
+  },
+  "gitHead": "977e046daa7dbf669b8a6c6a8d153fb22e477358"
 }
