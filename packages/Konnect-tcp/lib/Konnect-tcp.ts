@@ -7,16 +7,18 @@ type Options = Partial<{
     noDelay:boolean,
     // ttl:number,
 }>
-type Connection = Konnection<Buffer,Buffer,net.Socket>
+type Connection = Konnection<net.Socket>
 
 function setupConnection(conn:Connection,socket:net.Socket){
     socket.on("data",data=>{
         conn.emit("data",data)
     })
     socket.on("close",(hasError)=>{
-        conn.emit("close",hasError)
+        conn.emit("close")
     })
     socket.on("error",err=>{
+        if("ECONNRESET"===(err as any)?.code) return conn.emit("close")
+        // console.log("tcp error",err)
         conn.emit("error",err)
     })
 }
@@ -30,7 +32,7 @@ export let KonnectTCP = defineImpl((options:Options={})=>node=>{
     if(options.isServer){
         net.createServer(socket=>{
             socket.setNoDelay(options.noDelay)
-            let conn = new Konnection(node,socket)
+            let conn = Konnection.from(node,socket)
             setupConnection(conn,socket)
             node.emit("connection",conn)
         }).listen(options.port)
@@ -45,15 +47,19 @@ export let KonnectTCP = defineImpl((options:Options={})=>node=>{
         connectTo:(conn:Connection, addr)=>new Promise((res,rej)=> {
             let url = UrlData.create(addr.url||"")
             if(!url) return rej()
-            conn.raw = net.createConnection(url.portNum,url.host)
+            conn.raw = net.createConnection(url.portNum,url.host,()=>{})
             conn.raw.on("connect",()=>{
                 node.emit("connection",conn)
+                setupConnection(conn,conn.raw)
+                res()
             })
             conn.raw.on("error",err=>{
-                if("connect"===(err as any)?.syscall) rej()
+                if("connect"===(err as any)?.syscall) {
+                    conn.raw.removeAllListeners()
+                    conn.raw.end()
+                    rej(err)
+                }
             })
-            setupConnection(conn,conn.raw)
-            res()
         }),
         closeConnection(conn:Connection, reason) {
             conn.raw.end()

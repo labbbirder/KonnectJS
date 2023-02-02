@@ -60,9 +60,7 @@ export function startClient(){
     .use(FilterEvent,["data"])
     .use(()=>ctx=>console.log(ctx.dataIn))
 
-    let conn = new Konnection(node)
-    conn.connectTo({url:"127.0.0.1:3000"})
-    return conn
+    return node.CreateConnectTo({url:"127.0.0.1:3000"})
 }
 
 /*

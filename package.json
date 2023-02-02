@@ -12,11 +12,14 @@
     "packages/*"
   ],
   "dependencies": {
-    "konnectjs":"./packages/KonnectJS",
-    "konnect-ws":"./packages/Konnect-ws",
-    "konnect-tcp":"./packages/Konnect-tcp",
-    "konnect-local":"./packages/Konnect-local",
-    "konnect-proto":"./packages/Konnect-proto",
+    "chalk": "4.1.2",
+    "konnect-local": "./packages/Konnect-local",
+    "konnect-proto": "./packages/Konnect-proto",
+    "konnect-tcp": "./packages/Konnect-tcp",
+    "konnect-ws": "./packages/Konnect-ws",
+    "konnectjs": "./packages/KonnectJS",
+    "log4js": "^6.7.1",
+    "ts-log": "^2.2.5",
     "ws": "^8.12.0"
   }
 }

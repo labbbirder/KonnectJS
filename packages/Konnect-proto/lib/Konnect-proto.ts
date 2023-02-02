@@ -1,7 +1,8 @@
 // import { defineMidware } from "Konnect";
 
 import { BufferList } from "bl";
-import { Context, defineMidware, Konnection } from "KonnectJS";
+import { defineMidware, Kontext } from "KonnectJS";
+const sleep = (ms:number)=>new Promise(res=>setTimeout(res,ms))
 type ReconnectOptions = Partial<{
     /**
      * time to reconnect since disconnection. default is 1s
@@ -10,15 +11,19 @@ type ReconnectOptions = Partial<{
 }>
 
 export let KonnectReconnect = defineMidware(function(opt:ReconnectOptions={}){
-    opt = {
+    let option = {
         timeout:1000,
         ...opt
     }
+    let reconnect = async()=>{
+        while(this.status==="idle"){
+            await sleep(option.timeout)
+            console.log("retry reconnect...")
+            if(this.status==="idle")await this.connectTo(this.remoteAddress)
+        }
+    }
     this.on("status",(stat,prev)=>{
-        if(stat==="idle"&&this.intend=="connect") setTimeout(() => {
-            if(this.status!="idle") return
-            this.connectTo(this.remoteAddress)
-        }, opt.timeout);
+        if(stat==="idle"&&this.intend=="connect") reconnect()
     })
     return (ctx,next)=>{
         next()
@@ -65,6 +70,7 @@ export class BufferUtil{
         return buf
     }
     readVariedInt():number{
+        if(!this.buf.length) return -1;
         let offset = 0
         let bt
         let res = 0
@@ -96,55 +102,54 @@ export class BufferUtil{
 // console.log(ret)
 
 type SplitOptions = {
-
+    /**
+     * max allowed package size, 0 or negative for infinite
+     */
+    maxBytes? : number,
 }
 
 /**
  * avoid sticky package and half package problem. useful when your network protocol is stream-based
  */
 export let KonnectSplit = defineMidware(function(opt:SplitOptions={}){
-    opt = {
-        
+    let option = {
+        maxBytes:8<<10,
         ...opt
-    }
+    } as Required<SplitOptions>
+
     let rcvBuffer = new HybridBufferList()
     return async (ctx,next)=>{
-        if(ctx.eventType==="form"){
-            if(ctx.dataIn?.length) rcvBuffer.append(ctx.dataIn)
+        if(ctx.dataIn){
+            if(ctx.dataIn.length) rcvBuffer.append(ctx.dataIn)
             let bu = new BufferUtil(rcvBuffer)
             let len = bu.readVariedInt()
             if(len<0) {
-                ctx.dataIn = null
                 return
+            }
+            if(option.maxBytes>0 && len>option.maxBytes){
+                throw Error("package is too large")
             }
             let buf = bu.readBuffer(len)
             if(!buf) {
-                ctx.dataIn = null
+                console.log("buf not enough",rcvBuffer.toString())
                 return
             }
             ctx.dataIn = buf
             rcvBuffer.consume(bu.pos)
-            await next()
-            return
-        }
-        if(ctx.eventType==="data"){
-            if(ctx.dataIn==null) return
-            await next()
+
             if(rcvBuffer.length){
-                // console.log(rcvBuffer)
-                ctx.conn.emit("data",Buffer.allocUnsafe(0))
+                ctx.conn.once("complete",()=>{
+                    ctx.conn.emit("data",Buffer.allocUnsafe(0))
+                })
             }
-            return
         }
-        if(ctx.eventType==="unform"){
-            await next()
-            ctx.dataOut = new HybridBufferList()
-            .append(BufferUtil.variedInt(ctx.dataOut.length))
-            .append(ctx.dataOut)
+        await next()
+        ctx.dataOut = ctx.dataOut?.map(d=>{
+            return new HybridBufferList()
+            .append(BufferUtil.variedInt(d.length))
+            .append(d)
             .subarray()
-            return
-        }
-        next()
+        })
     }
 })
 
@@ -162,6 +167,7 @@ type HeartbeatOption = {
      */
     maxLifeime?:number
 }
+
 enum HeartbeatMessage{
     PING = 0xC5,
     PONG = PING^0xff,
@@ -169,6 +175,10 @@ enum HeartbeatMessage{
 let bufPing = Buffer.from([HeartbeatMessage.PING])
 let bufPong = Buffer.from([HeartbeatMessage.PONG])
 
+/**
+ * A connection detect strategy, which automatically closes connection on time exceeded.\
+ * only works in **packet-based** protocol
+ */
 export let KonnectHeartbeat = defineMidware(function(opt:HeartbeatOption={}){
     let option = {
         heartBeatInterval :2000,
@@ -196,31 +206,46 @@ export let KonnectHeartbeat = defineMidware(function(opt:HeartbeatOption={}){
             // this.emit("close","heartbeat")
         }, opt.maxLifeime);
     }
-    return async(ctx:Context<Buffer,Buffer>,next)=>{
+    return async(ctx:Kontext<Buffer,Buffer>,next)=>{
         if(ctx.eventType==="connection"){
             heartbeat()
             return await next()
         }
-        if(ctx.eventType==="form"){
+        if(ctx.eventType==="data"){
             heartbeat()
-            if (!ctx.dataIn) return await next()
-            if (ctx.dataIn[0] == HeartbeatMessage.PING) {
+            // if (!ctx.dataIn) return await next()
+            if (ctx.dataIn?.at(0) == HeartbeatMessage.PING) {
                 if (ctx.dataIn.length == 1) { // got ping
                     await this.send(bufPong)
-                    ctx.dataIn = undefined
+                    // ctx.dataIn = undefined
                     return
                 } else {
                     ctx.dataIn = ctx.dataIn.subarray(1)
                 }
-            } else if (ctx.dataIn[0] == HeartbeatMessage.PONG) {
+            } else if (ctx.dataIn?.at(0) == HeartbeatMessage.PONG) {
                 if (ctx.dataIn.length == 1) { // got pong
-                    ctx.dataIn = undefined
+                    // ctx.dataIn = undefined
                     // console.log("get pong")
                     return
                 } else {
                     ctx.dataIn = ctx.dataIn.subarray(1)
                 }
             }
+
+            return await next()
+        }
+        
+        if(ctx.eventType==="push" && ctx.dataOut?.length==1){
+            if(
+                ctx.dataOut[0] instanceof Buffer &&
+                (
+                    ctx.dataOut[0].equals(bufPing) ||
+                    ctx.dataOut[0].equals(bufPong)
+                )
+            ){
+                return
+            }
+
             return await next()
         }
         next()

@@ -1,7 +1,5 @@
 import { WebSocket, WebSocketServer } from "ws"
-import { Konnection, defineImpl, Knode, ConnectionImpl, UrlData } from "KonnectJS"
-type WSConnection = Konnection<any,any,WebSocket>
-
+import { defineImpl, UrlData, Konnection } from "KonnectJS"
 
 function setupWebSocket(ws:WebSocket,conn:Konnection){
     ws.on("message",(data:Buffer)=>{
@@ -25,32 +23,33 @@ export let KonnectWS = (defineImpl((opt:Options = {})=>(node)=>{
     if(!!opt.isServer){
         wss = new WebSocketServer(opt)
         wss.on("connection",ws=>{
-            let conn = new Konnection(node,ws)
+            let conn = Konnection.from(node,ws)
             setupWebSocket(ws,conn)
             node.emit("connection",conn)
         })
     }
     return {
         raw:wss,
-        closeConnection(conn:WSConnection,reason){
+        closeConnection(conn,reason){
             conn.raw.close(reason?.code,reason?.reason)
             return Promise.resolve()
         },
-        sendTo(conn:WSConnection,data) {
+        sendTo(conn,data) {
             conn.raw.send(data)
             return Promise.resolve()
         },
-        connectTo: (conn:WSConnection,addr)=>new Promise((res,rej)=>{
+        connectTo: (conn,addr)=>new Promise((res,rej)=>{
             let url = UrlData.create(addr.url||"")
             if(!url) return rej()
             url.proto = "ws"
-            conn.raw = new WebSocket(url.compose())
-            conn.raw.on("open",()=>{
+            let ws = new WebSocket(url.compose())
+            ws.on("open",()=>{
                 node.emit("connection",conn)
             })
-            conn.raw.on("error",err=>{
+            ws.on("error",err=>{
                 if("connect"===(err as any)?.syscall) rej()
             })
+            conn.raw = ws
             setupWebSocket(conn.raw,conn)
             res()
         }),

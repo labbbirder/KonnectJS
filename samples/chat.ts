@@ -1,6 +1,6 @@
 import { FilterEvent, Knode, Konnection, ReformIO } from "KonnectJS";
 import { KonnectWS } from "Konnect-ws";
-export * from './types'
+export * from './common/types'
 
 export function startServer(){
     console.log("start")
@@ -39,10 +39,18 @@ export function startClient(){
     .use(FilterEvent,["data"])
     .use(()=>ctx=>console.log(ctx.dataIn))
 
-    return node.ConnectTo({url:"127.0.0.1:3000"}) //return a konnection
+    return node.CreateConnectTo({url:"127.0.0.1:3000"}) //return a konnection
 }
 
 
+// const cli_opt = process.argv[3]
+// if(cli_opt=="-c"){
+//     startClient()
+// }
+// if(cli_opt=="-s"){
+//     startServer()
+// }
+// let c1 = startClient()
 /*
 On Server Side:
     import {startServer} from './chat'

@@ -6,6 +6,7 @@
         "module": "commonjs",
         "esModuleInterop": true,
         "allowSyntheticDefaultImports": true,
+        // "lib":["ES2019","DOM"],
         "target": "es6",
         "noImplicitAny": true,
         "moduleResolution": "node",
