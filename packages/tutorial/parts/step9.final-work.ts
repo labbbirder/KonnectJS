@@ -58,22 +58,3 @@ export function startClient(){
 
     return node.CreateConnectTo({url:"127.0.0.1:3000"})
 }
-
-
-// startServer()
-// startClient().on("connection",conn=>{
-//     conn.send("123")
-//     conn.send("456")
-// })
-// setTimeout(process.exit,1000)
-
-/*
-On Server Side:
-    import {startServer} from './chat'
-    startServer()
-
-On numbers of Client Sides:
-    import {startClient} from './chat'
-    let c = startClient()
-    c.send("hi")
-*/

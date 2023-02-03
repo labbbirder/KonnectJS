@@ -1,6 +1,5 @@
 import { Knode,FilterEvent,Konnection,defineMidware,DebugEvent } from "KonnectJS";
 import { KonnectLocal } from "Konnect-local";
-import { logger } from "./common/logger";
 
 
 // let debug = defineMidware((ev:string[]=["data"],prefix:string="")=>(ctx,next)=>{
@@ -13,7 +12,7 @@ import { logger } from "./common/logger";
 function createNode(nodeName:string){
     return new Knode()
     .setImpl(KonnectLocal())
-    .use(["data"],DebugEvent,nodeName,2,logger)
+    .use(["data"],DebugEvent,{prefix:nodeName})
     // .use(debug,["data","connection","close"],nodeName)
 }
 
@@ -40,7 +39,6 @@ B.use(FilterEvent,["data"])
 
 let B2A = Konnection.from(B)
 B2A.connectTo(A)
-// A.ConnectTo(B)
 B.CreateConnectTo(C)
 B.CreateConnectTo(D)
 
@@ -48,22 +46,3 @@ setTimeout(() => {
     A.broadcast("hello, from A")
 }, 100);
 // console.log(B,C)
-
-// console.log(1)
-// Promise.resolve(123).finally(()=>console.log("fin"))
-// console.log(3)
-
-
-// let e = new EventEmitter()
-// e.on("asd",()=>console.log(1))
-// e.once("asd",()=>console.log("oc"))
-// e.once("asd",()=>console.log("oc2"))
-// e.once("asd",()=>console.log("oc3"))
-// e.on("asd",()=>console.log(1111))
-
-
-// for(let l of e.rawListeners("asd")){
-//     l()
-// }
-
-// console.log(e)
