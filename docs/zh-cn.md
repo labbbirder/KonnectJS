@@ -1,6 +1,7 @@
 
 ![logo](logo.png)
 
+
 KonnectJS 是一个非常灵活的基于结点和连接的抽象架构。专门为面向连接的应用而设计，可以随意切换各种网络协议
 
 此项目尚处于开发中，这意味着：
@@ -90,6 +91,48 @@ KonnectJS适用的一些场景举例如下：
 * 如何真正的建立连接。如自定义握手，自定义认证等
 * 及其他各种
 
+```mermaid
+classDiagram
+
+    websocket <..>KonnectWS: bytes
+    tcp <..>KonnectTCP: bytes
+    anyothers <..>OtherImpls: other data format...
+    KonnectWS --> Knode:setImpl()\n.use(KonnectSplit)\n.use(KonnectHeartbeat)\n.use(ReformIO< Buffer >)
+    KonnectTCP --> Knode:setImpl()\n.use(KonnectHeartbeat)\n.use(ReformIO< Buffer >)
+    OtherImpls --> Knode:setImpl()\n.use(some specific strategies...)\n.use(ReformIO< Buffer >)
+    Knode --> BusinessApplication: .use(logger)\n.use(router)\n.use(...)
+    class KonnectWS{
+        // only interfaces unified.
+        // compatible for native websocket...
+        // compatible for konnectjs...
+    }
+    class OtherImpls{
+        // only interfaces unified.
+        // compatible for raw protocol...
+        // compatible for konnectjs...
+    }
+    class KonnectTCP{
+        // only interfaces unified.
+        // compatible for native tcp...
+        // compatible for konnectjs...
+    }
+    class Knode{
+        // hides differences of protocols
+        -connection[]
+        +send()
+        +connect()
+        +close()
+        +on()
+        +emit()
+    }
+
+    class BusinessApplication{
+        // your code is deeply decoupled
+        +foo()
+        +bar()
+        +fly()
+    }
+ ```
 ## 安装
 clone the source code:
 ```sh
@@ -103,7 +146,7 @@ when you installed the project successfully, it's time to import to your script:
 ```typescript
 import { Knode,Konnection } from 'KonnectJS'
 ```
-## 开始认识
+## 起步
 ### 运行一个WS服务器
 the code below illustrates how a websocket server is created:
 ```typescript
