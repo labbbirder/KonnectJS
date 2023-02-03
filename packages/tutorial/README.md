@@ -39,14 +39,15 @@ connection.on("connection",()=>{
     console.log("connected!")
 })
 
+
 // All above can be shorten to:
 
-// let conn = new Knode()
-// .setImpl(KonnectTCP())
-// .CreateConnectTo({url:"127.0.0.1:3000"})
-// .on("connection",()=>{
-//     console.log("connected!")
-// })
+let conn = new Knode()
+.setImpl(KonnectTCP())
+.CreateConnectTo({url:"127.0.0.1:3000"})
+.on("connection",()=>{
+    console.log("connected!")
+})
 
 ```
 Generally, `isServer`( by default false ) is used for specify whether it's a server or not.
@@ -59,19 +60,23 @@ import { Knode, ReformIO } from "konnectjs";
 new Knode()
 
 .use(ReformIO<Buffer,string>,/*...args*/)
-// the same as:
-// .use( ()=>ReformIO<Buffer,Buffer>(/*...args*/) )
 
-// use middleware with event filter
-.use(["data"], ReformIO<Buffer>) // for "data" event only
-.use(["data","connection"], ReformIO<Buffer>) // for "data" ,"connection" only
+// the same as:
+.use( ()=>ReformIO<Buffer,Buffer>(/*...args*/) )
+
+// for "data" event only
+.use(["data"], ReformIO<Buffer>)
+
+// for "data" "connection" only
+.use(["data","connection"], ReformIO<Buffer>) 
 
 ```
-An outter IO data form can be varied, which can be string, bytes, json or anything else. Therefore, KonnectJS specifies the IO data format by stacking `ReformIO` middleware.
-
-`ReformIO` use two template arguments.The `TI` is used to specify input data type. The `TO` is for output data type, which will be the same as input data type if omitted.
-
-`ReformIO` can be called with a argument for transformer. A `former` transforms input data to inner application data. Correspondingly The `unformer` transforms output data from application upwards.
+> ### About ReformIO
+> An outter IO data form can be varied, which can be string, bytes, json or anything else. Therefore, KonnectJS specifies the IO data format by stacking `ReformIO` middleware.
+>
+> `ReformIO` use two template arguments.The `TI` is used to specify input data type. The `TO` is for output data type, which will be the same as input data type if omitted.
+>
+>`ReformIO` can be called with a argument for transformer. A `former` transforms input data to inner application data. Correspondingly The `unformer` transforms output data from application upwards.
 
 here is an example for using `ReformIO`:
 ```typescript
@@ -205,7 +210,7 @@ export function startClient(){
         heartBeatInterval:3000,
         maxLifeime:7000,
     })
-    .use(KonnectReconnect,{ timeout:1500 })
+    .use(KonnectReconnect,{ timeout:1500 }) //reconnect if disconnected
     .use(DebugEvent,{prefix:"client"})
     .use(ReformIO<string>, { // reform network io
         former:b=>b.toString(),

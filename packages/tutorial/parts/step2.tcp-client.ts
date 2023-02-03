@@ -12,11 +12,12 @@ connection.on("connection",()=>{
     console.log("connected!")
 })
 
+
 // All above can be shorten to:
 
-// let conn = new Knode()
-// .setImpl(KonnectTCP())
-// .CreateConnectTo({url:"127.0.0.1:3000"})
-// .on("connection",()=>{
-//     console.log("connected!")
-// })
+let conn = new Knode()
+.setImpl(KonnectTCP())
+.CreateConnectTo({url:"127.0.0.1:3000"})
+.on("connection",()=>{
+    console.log("connected!")
+})

@@ -23,11 +23,12 @@ KonnectJS mainly implements functionalities by stacking middlewares. It is somet
 ```typescript
 !import[/packages/tutorial/parts/step3.use-middleware.ts]
 ```
-An outter IO data form can be varied, which can be string, bytes, json or anything else. Therefore, KonnectJS specifies the IO data format by stacking `ReformIO` middleware.
-
-`ReformIO` use two template arguments.The `TI` is used to specify input data type. The `TO` is for output data type, which will be the same as input data type if omitted.
-
-`ReformIO` can be called with a argument for transformer. A `former` transforms input data to inner application data. Correspondingly The `unformer` transforms output data from application upwards.
+> ### About ReformIO
+> An outter IO data form can be varied, which can be string, bytes, json or anything else. Therefore, KonnectJS specifies the IO data format by stacking `ReformIO` middleware.
+>
+> `ReformIO` use two template arguments.The `TI` is used to specify input data type. The `TO` is for output data type, which will be the same as input data type if omitted.
+>
+>`ReformIO` can be called with a argument for transformer. A `former` transforms input data to inner application data. Correspondingly The `unformer` transforms output data from application upwards.
 
 here is an example for using `ReformIO`:
 ```typescript
