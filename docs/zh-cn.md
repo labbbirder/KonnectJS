@@ -1,5 +1,5 @@
 
-![logo](logo.png)
+![logo](https://raw.githubusercontent.com/labbbirder/KonnectJS/main/docs/logo.png)
 
 
 KonnectJS 是一个非常灵活的基于结点和连接的抽象架构。专门为面向连接的应用而设计，可以随意切换各种网络协议
