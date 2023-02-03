@@ -3,7 +3,10 @@
   "version": "0.1.3",
   "description": "WebSocket shell of KonnectJS",
   "main": "dist/index.js",
-  "files": ["dist/**/*.js","dist/**/*.d.ts"],
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts"
+  ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc"
@@ -19,5 +22,5 @@
   "devDependencies": {
     "@types/ws": "^8.5.4"
   },
-  "gitHead": "977e046daa7dbf669b8a6c6a8d153fb22e477358"
+  "gitHead": "47865fa029da6e6a107330339c3e0d900fdf034f"
 }

@@ -4,6 +4,7 @@ type ConnectionStatus = "idle"|"connecting"|"established"
 
 const kSetIndex = Symbol()
 const kGetIndex = Symbol()
+const kRemoveKn = Symbol()
 
 export interface ConnectionImpl<TConn extends KonnectionBase=KonnectionBase>{
     raw?:any,
@@ -74,6 +75,7 @@ export class KonnectionBase<TRaw=any> extends EventEmitter
         this.on("connection",()=>this.status = "established")
         this.on("close",()=>this.status = "idle")
         this.on("error",(err)=>console.error("Err From Impl",err)) // disable Uncaught Message
+        this.on("close",()=>this.localNode[kRemoveKn](this))
         // this.resetListeners()
     }
     bakeListeners() {
@@ -184,28 +186,30 @@ export class KnodeBase<TI = any,TO = any> extends EventEmitter{
         this.on("connection",conn=>{
             this.connections.push(conn[kSetIndex](this.connections.length))
             conn.localNode = this
-            conn.resetListeners()
-            conn.on("close",()=>{
-                conn.resetListeners()
-                let taridx = conn[kGetIndex]()
-                if(this.connections[taridx]!=conn){
-                    throw Error("not a valid connection")
-                    return
-                }
-                if(taridx<0||taridx>=this.connections.length){
-                    throw Error("remove connection of an invalid index")
-                }
-                if(this.connections.length==taridx+1){
-                    this.connections.pop()
-                }else{
-                    let tail = this.connections.pop()[kSetIndex](taridx)
-                    this.connections[taridx] = tail
-                }
-            })
+            // conn.resetListeners()
+
             conn.emit("connection",conn)
         })
     }
 
+    [kRemoveKn](conn:KonnectionBase){
+        let node = this
+        let taridx = conn[kGetIndex]()
+        conn[kSetIndex](-1) //mark as invalid
+        if(node.connections[taridx]!=conn){
+            throw Error("not a valid connection")
+            return
+        }
+        if(taridx<0||taridx>=node.connections.length){
+            throw Error("remove connection of an invalid index")
+        }
+        if(node.connections.length==taridx+1){
+            node.connections.pop()
+        }else{
+            let tail = node.connections.pop()[kSetIndex](taridx)
+            node.connections[taridx] = tail
+        }
+    }
     setImpl(impl:(node:KnodeBase)=>ConnectionImpl){
         this.impl = impl(this)
         return this

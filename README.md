@@ -1,5 +1,5 @@
 
-![logo](packages/KonnectJS/docs/logo.png)
+![logo](https://github.com/labbbirder/KonnectJS/blob/main/docs/logo.png)
 
 An extremely flexible abstraction of node-connections structure, which designed for keep-in-connection using, can be fit with any type of network protocol
 

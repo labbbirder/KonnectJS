@@ -4,6 +4,7 @@ import convert from 'koa-convert'
 import { Logger } from 'ts-log'
 import { isGeneratorFunction } from 'util/types'
 import {Address, ConnectionImpl, KnodeBase,KonnectionBase} from "./core.app"
+import { logger as defaultLogger } from './logger'
 
 const kCallback = Symbol()
 const kComplete = Symbol()
@@ -97,6 +98,14 @@ export class Konnection<TRaw=any> extends KonnectionBase<TRaw>{
     private constructor(localNode:Knode,raw?:TRaw){
         super(localNode,raw)
         this[kCtxStck] = []
+        this.on("data",dataIn=>{
+            shipContext("data",{conn:this,dataIn})
+        }).prependListener("close",dataIn=>{
+            if(this.status==="idle") return
+            shipContext("close",{conn:this,dataIn})
+        }).on("error",error=>{
+            shipContext("error",{conn:this,error})
+        })
         this.refresh()
         this.bakeListeners()
     }
@@ -187,35 +196,22 @@ export class Knode<TI=any,TO=any> extends KnodeBase<TI,TO>{
         this.connections = []
         // redirect events to middlewares
         this.on("connection",conn=>{
-            // let cb = conn[kCallback]
-            // let ctx = createContext(conn)
-            conn.on("data",dataIn=>{
-                // let ctx = createContext(conn,{ dataIn })
-                // cb("data",ctx).finally(()=>conn[kComplete](ctx))
-                shipContext("data",{conn,dataIn})
-            }).prependListener("close",dataIn=>{
-                if(conn.status==="idle") return
-                // let ctx = createContext(conn,{ dataIn })
-                // cb("close",ctx).finally(()=>conn[kComplete](ctx))
-                shipContext("close",{conn,dataIn})
-            }).on("error",error=>{
-                // let ctx = createContext(conn,{ error })
-                // cb("error",ctx).finally(()=>conn[kComplete](ctx))
-                shipContext("error",{conn,error})
-            })
             shipContext("connection",{conn})
-            // cb("connection",ctx).finally(()=>conn[kComplete](ctx))
         })
+    }
+    override setImpl(impl:(node:Knode)=>ConnectionImpl<Konnection>){
+        super.setImpl(impl)
+        return this
     }
 
     use<
         T extends (this:Konnection,...args:any[])=>MiddlewareFunction<TI,TO>,
         K extends Knode=Knode<TI,TO>
-    >(events:EventType[],func:T,...args:Parameters<T>):NormalizedKnodeType<ReturnType<ReturnType<T>>,K>;
+    >(func:T,...args:Parameters<T>):NormalizedKnodeType<ReturnType<ReturnType<T>>,K>;
     use<
         T extends (this:Konnection,...args:any[])=>MiddlewareFunction<TI,TO>,
         K extends Knode=Knode<TI,TO>
-    >(func:T,...args:Parameters<T>):NormalizedKnodeType<ReturnType<ReturnType<T>>,K>;
+    >(events:EventType[],func:T,...args:Parameters<T>):NormalizedKnodeType<ReturnType<ReturnType<T>>,K>;
     use(filter:any,func?:any,...args:any[]):any{
         let opt = {} as any
         if(filter instanceof Array<string>){
@@ -304,7 +300,7 @@ export let FilterEvent = defineMidware((filter:EventType[],options?:{exlucde?:bo
 const kDebugEventIndent = Symbol()
 const kDebugEventDepth = Symbol()
 const packDebugData = (name:string,value:any)=>value?name+": "+
-    (value instanceof Buffer?`<Buffer ${value}>`:`'${value}'`)
+    (value instanceof Buffer?`<Buffer ${value}>`:`'${value}'`) + " "
     :''
 const packDebugMessage=(ctx:Kontext,prefix:string,isStart:boolean)=> ""
     + " ".repeat(ctx[kDebugEventIndent])
@@ -313,14 +309,17 @@ const packDebugMessage=(ctx:Kontext,prefix:string,isStart:boolean)=> ""
     + packDebugData("out",ctx.dataOut)
     + packDebugData("err",ctx.error)
 
-export let DebugEvent = defineMidware((prefix:string,indent=1,logger:Logger=console)=>async (ctx,next)=>{
+export let DebugEvent = defineMidware((opt?:{prefix?:string,indent?:number,logger?:Logger})=>async (ctx,next)=>{
+    let {logger,indent,prefix} = {
+        prefix:"",
+        logger:defaultLogger,
+        indent:1,
+        ...opt||{}
+    }
     ctx[kDebugEventIndent]||=0
     ctx[kDebugEventDepth]||=0
-    // let strIn = "",strOut = ""
-    if(!ctx[kDebugEventDepth])logger.info(`--- get <${ctx.eventType}> event ---`)
+    if(!ctx[kDebugEventDepth])logger.info(`--- ${prefix} get <${ctx.eventType}> event ---`)
     
-    // strIn = ctx.dataIn?` in: ${ctx.dataIn}`:``
-    // strOut = ctx.dataOut?` out: ${ctx.dataOut}`:``
     logger.debug(packDebugMessage(ctx,prefix,true))
     
     ctx[kDebugEventIndent] += indent
@@ -329,8 +328,6 @@ export let DebugEvent = defineMidware((prefix:string,indent=1,logger:Logger=cons
     ctx[kDebugEventDepth] --
     ctx[kDebugEventIndent] -= indent
 
-    // strIn = ctx.dataIn?` in: ${ctx.dataIn}`:``
-    // strOut = ctx.dataOut?` out: ${ctx.dataOut}`:``
     logger.debug(packDebugMessage(ctx,prefix,false))
 })
 

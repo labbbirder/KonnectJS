@@ -6,7 +6,10 @@
   "homepage": "https://github.com/labbbirder/KonnectJS#readme",
   "license": "ISC",
   "main": "dist/konnect-tcp.js",
-  "files": ["dist/**/*.js","dist/**/*.d.ts"],
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/labbbirder/KonnectJS.git"
@@ -23,5 +26,5 @@
     "koa-convert": "^2.0.0",
     "konnectjs": "^0.1.1"
   },
-  "gitHead": "977e046daa7dbf669b8a6c6a8d153fb22e477358"
+  "gitHead": "47865fa029da6e6a107330339c3e0d900fdf034f"
 }
