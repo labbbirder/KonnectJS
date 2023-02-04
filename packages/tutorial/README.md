@@ -7,21 +7,69 @@ npm i -S konnectjs konnect-tcp konnect-ws konnect-proto # install denpendencies 
 ```
 It's very simple to startup a server. Only specify the network protocol by `setImpl`
 ```typescript
-!import[/packages/tutorial/parts/step1.tcp-server.ts]
+import { KonnectTCP } from "konnect-tcp";
+import { Knode } from "konnectjs/dist/middleware.app";
+
+export const server = new Knode()
+.setImpl(KonnectTCP({port:3000,isServer:true})) // listen on port 3000
+.use(()=>(ctx,next)=>{
+    // outputs on event
+    console.log(ctx.eventType,ctx.dataIn)
+    next()
+})
+
+
 ```
 By now you have a tcp server listening on port 3000
 
 ## Step 2. Create a Client for Test
 let's now create a client either to test with.
 ```typescript
-!import[/packages/tutorial/parts/step2.tcp-client.ts]
+import { KonnectTCP } from "konnect-tcp";
+import { Knode } from "konnectjs";
+
+
+let client = new Knode()
+.setImpl(KonnectTCP()) // not a server , no listen
+
+// connect to server, returns a connecting connection.
+let connection = client.CreateConnectTo({url:"127.0.0.1:3000"})
+
+connection.on("connection",()=>{
+    console.log("connected!")
+})
+
+
+// All above can be shorten to:
+
+let conn = new Knode()
+.setImpl(KonnectTCP())
+.CreateConnectTo({url:"127.0.0.1:3000"})
+.on("connection",()=>{
+    console.log("connected!")
+})
+
 ```
 Generally, `isServer`( by default false ) is used for indicate whether it's a server.
 
 ## Step 3. Use a Middleware
 KonnectJS mainly implements functionalities by stacking middlewares. It is something similar to which in [koa](https://github.com/koajs/koa)
 ```typescript
-!import[/packages/tutorial/parts/step3.use-middleware.ts]
+import { Knode, ReformIO } from "konnectjs";
+
+new Knode()
+
+.use(ReformIO<Buffer,string>,/*...args*/)
+
+// the same as:
+.use( ()=>ReformIO<Buffer,Buffer>(/*...args*/) )
+
+// for "data" event only
+.use(["data"], ReformIO<Buffer>)
+
+// for "data" "connection" only
+.use(["data","connection"], ReformIO<Buffer>) 
+
 ```
 > ### About ReformIO
 > An outter IO data form can be varied, which can be string, bytes, json or anything else. Therefore, KonnectJS specifies the IO data format by stacking `ReformIO` middleware.
@@ -32,11 +80,45 @@ KonnectJS mainly implements functionalities by stacking middlewares. It is somet
 
 here is an example for using `ReformIO`:
 ```typescript
-!import[/packages/tutorial/parts/step3.reformio.ts]
+import { Knode, ReformIO } from "konnectjs";
+
+new Knode()
+
+// tells followings treat IO data as Buffer
+.use(ReformIO<Buffer>) // does nothing but typing data
+
+.use(()=>(ctx,next)=>{
+    ctx.dataIn // recv Buffer type
+    ctx.send(Buffer.alloc(2)) // send Buffer type
+    next()
+})
+.use(ReformIO<string>,{ // transform the buffer to string
+    former:input=>input.toString(),
+    unformer:output=>Buffer.from(output),
+})
+// from now on, we can regard IO data as string
+.use(()=>(ctx,next)=>{
+    ctx.dataIn // recv string type
+    ctx.send("hello, string") // send string type
+    next()
+})
 ```
 ## Step 4. Output Debug Information to Console
 ```typescript
-!import[/packages/tutorial/parts/step4.debug.ts]
+import { KonnectTCP } from "konnect-tcp"
+import { DebugEvent, Knode, ReformIO } from "konnectjs"
+
+new Knode()
+.setImpl(KonnectTCP({port:3000,isServer:true}))
+.use(ReformIO<Buffer>)
+
+.use(DebugEvent,{prefix:"transfer"})
+.use(ReformIO<string>,{
+    former:input=>input.toString(),
+    unformer:output=>Buffer.from(output),
+})
+
+.use(["data","connection","close"],DebugEvent,{prefix:"application"})
 ```
 when a client acts, you will see the output like:
 ```
@@ -81,11 +163,71 @@ client.use(KonnectHeartbeat)  // client too
 
 ## Step 7. Final Work
 ```typescript
-!import[\packages\tutorial\parts\step9.final-work.ts]
+import { Knode, ReformIO, DebugEvent } from "konnectjs";
+import { KonnectSplit,KonnectReconnect,KonnectHeartbeat } from "konnect-proto";
+import { KonnectTCP } from "konnect-tcp";
+
+
+export function startServer(){
+    console.log("chat server start")
+    let globalClientID = 0
+
+    let node = new Knode()
+    .setImpl(KonnectTCP({port:3000,isServer:true}))
+    .use(KonnectSplit) //avoid sticky package and half package problem
+    .use(KonnectHeartbeat,{
+        heartBeatInterval:2000,
+        maxLifeime:6000,
+    })
+    .use(DebugEvent,{prefix:"server net"})
+    .use(ReformIO<string>, { // reform network io
+        former:b=>b.toString(),
+        unformer:s=>Buffer.from(s),
+    })
+    .use(()=>{
+        let clientid = ++globalClientID
+        return async ctx=>{
+            if(ctx.eventType==="connection"){
+                ctx.send(`hello, ${clientid}`)
+            }
+            if(ctx.eventType==="data"){
+                node.sendTo(node.connections,`[${clientid}]: ${ctx.dataIn}`)
+            }
+            if(ctx.eventType==="close"){
+                node.sendTo(node.connections,`bye [${clientid}]`)
+            }
+        }
+    })
+    return node
+}
+
+
+export function startClient(){
+    let node = new Knode()
+    .setImpl(KonnectTCP())
+    .use(KonnectSplit)
+    .use(KonnectHeartbeat,{
+        heartBeatInterval:3000,
+        maxLifeime:7000,
+    })
+    .use(KonnectReconnect,{ timeout:1500 })
+    .use(DebugEvent,{prefix:"client"})
+    .use(ReformIO<string>, { // reform network io
+        former:b=>b.toString(),
+        unformer:s=>Buffer.from(s),
+    })
+    .use(DebugEvent,{prefix:"client2"})
+    .use(["data"],()=>ctx=>{
+        console.log("client recv - ",ctx.dataIn)
+    })
+
+    return node.CreateConnectTo({url:"127.0.0.1:3000"})
+}
+
 ```
-Now you can run the services by `startServer()` and `startClient()` to experient.
+By now you can run the script via `ts-node` to experient.
 
 
 > By the way, you can switch protocol from TCP to WebSocket or any others, by simpling replacing `KonnectTCP()` to `KonnectWS()` !
 
-!export[/packages/tutorial/README.md]
+
