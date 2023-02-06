@@ -1,7 +1,7 @@
 {
   "name": "konnectjs",
   "version": "0.1.5",
-  "description": "An extremely flexible abstraction of node-connections structure, which designed for keep-in-connection using, can be fit with any type of network protocol",
+  "description": "An abstraction of node-connections structure, which designed especially for keep-in-connection scene. can seamlessly switch protocols with: tcp udp ws polling sse http3 kcp, etc...",
   "main": "dist/index.js",
   "files": [
     "dist/**/*.js",
