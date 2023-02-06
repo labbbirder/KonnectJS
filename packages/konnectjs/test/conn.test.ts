@@ -13,12 +13,12 @@ test("connection scope",()=>{
         }
     })
     
-    let coA = new Konnection(node)
-    let coB = new Konnection(node)
-    node.emit("connection",coA)
+    let coA = node.createConnection()
+    let coB = node.createConnection()
+    coA.emit("connection",coA)
     coA.emit("data",0)
     coA.emit("data",1)
-    node.emit("connection",coB)
+    coB.emit("connection",coB)
     coB.emit("data",0)
     coA.emit("data",2)
     coB.emit("data",1)
@@ -40,18 +40,36 @@ test("connections maintain",()=>{
             }
         }
     })
-    let coA = new Konnection(node)
-    let coB = new Konnection(node)
-    let coC = new Konnection(node)
+    let coA = node.createConnection()
+    let coB = node.createConnection()
+    let coC = node.createConnection()
     expect(node.connections).toHaveLength(0)
-    node.emit("connection",coA)
-    node.emit("connection",coB)
-    node.emit("connection",coC)
+    coA.emit("connection",coA)
+    coB.emit("connection",coB)
+    coC.emit("connection",coC)
     expect(node.connections).toHaveLength(3)
     coA.emit("close",{})
     expect(node.connections).toHaveLength(2)
-    expect(node.connections[0]._index).toBe(0)
+    expect((node.connections[0] as any)._index[node.connections[0].localNode.id]).toBe(0)
     expect(node.connections[0]).toBe(coC)
     expect(node.connections[1]).toBe(coB)
+})
+
+test("connections index",()=>{
+    let A = new Knode()
+    .to(()=>B)
+    let C = new Knode()
+    .to(()=>B)
+    
+    let B = new Knode()
+    
+    A.createConnection().emit("connection")
+    C.createConnection().emit("connection")
+    C.createConnection().emit("connection")
+
+
+    expect(A.connections).toHaveLength(1)
+    expect(B.connections).toHaveLength(3)
+    expect(C.connections).toHaveLength(2)
 })
 

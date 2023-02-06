@@ -2,19 +2,16 @@ import EventEmitter from 'events'
 
 type ConnectionStatus = "idle"|"connecting"|"established"
 
-const kSetIndex = Symbol()
-const kGetIndex = Symbol()
-const kRemoveKn = Symbol()
+const kSetIndex  = Symbol()
+const kGetIndex  = Symbol()
+const kOnClose   = Symbol()
+const kOnNewConn = Symbol()
+const kInited    = Symbol()
+const kInit      = Symbol()
+const kCreate    = Symbol()
 
-export interface ConnectionImpl<TConn extends KonnectionBase=KonnectionBase>{
-    raw?:any,
-    sendTo:(conn:TConn,data:any)=>Promise<void>,
-    closeConnection:(conn:TConn,reason:any)=>Promise<void>,
-    connectTo:(conn:TConn,addr:Address)=>Promise<void>,
-    broadcast?:(data:any)=>Promise<void>,
-    shutdown?:()=>Promise<void>,
-    [key:string]:any
-}
+
+
 
 export interface Address{
     url?:string,
@@ -22,6 +19,72 @@ export interface Address{
 }
 
 
+
+export interface BrokerOption {
+    /**
+     * whether can be connectioned by remotes
+     */
+    isPublic:boolean
+}
+
+/**
+ * remeber do the follwing things in subclass:
+ * 
+ * required:
+ * 
+ * * emit: `connection` `close` `data` `error`
+ * * implement: `send` `close` `connect` `shutdown`
+ * 
+ * optional:
+ * 
+ * * setType `incomeDataTye` `outcomeDataType`
+ * @see https://TODO.Write_A_DOC
+ */
+export abstract class BrokerBase<T=any>{
+    [kInited]:boolean
+    abstract incomeDataType:any
+    abstract outcomeDataType:any;
+    abstract raw?: any
+    // private localNode:KnodeBase
+    /**
+     * create a connection.
+     * @param raw raw object held by the created connection
+     * @param emitEvent whether emit a `connection` event. if **true**, the connection
+     * will be known in knode and marked as "established",
+     * otherwise, return a connection out of `knode.connections[]` in "idle" status.
+     * @returns the created connection
+     */
+    createConnection:(raw:T,emitEvent:boolean)=>KonnectionBase<T>;
+
+    constructor(opt:BrokerOption){
+        this[kInited] = false
+    }
+    [kInit](createFunc:typeof this["createConnection"]){
+        if(this[kInited]) throw Error("Broker is already added")
+        this.createConnection = createFunc
+        this[kInited] = true
+    }
+    abstract send(conn:KonnectionBase<T>,data:any):Promise<void>;
+    abstract close(conn:KonnectionBase<T>,reason:any):Promise<void>;
+    abstract connect(conn:KonnectionBase<T>,remote:Address):Promise<void>;
+    broadcast?(data:any):Promise<void>;
+    abstract shutdown?():Promise<void>;
+}
+
+
+
+
+
+
+
+function delegateCreateConn<T>(node:KnodeBase){
+    return (raw:T,emitEvent:boolean)=>{
+        let conn = node.createConnection()
+        conn.raw = raw
+        if(emitEvent) conn.emit("connection",conn)
+        return conn
+    }
+}
 
 
 
@@ -35,17 +98,18 @@ export class KonnectionBase<TRaw=any> extends EventEmitter
     localNode:KnodeBase;
     remoteAddress:Address|KnodeBase;
     intend:"unknown"|"connect"|"close"
-    private _index:number;    
+    private _index:{[k:symbol]:number};    
     private _status:ConnectionStatus
-    private _impl:ConnectionImpl;
+    // private _broker:BrokerBase;
     private _bakedListeners:{[k:string]:Function[]}
-    get impl(){
-        return this._impl || this.localNode.impl
+    get broker(){
+        return /*this._broker ||*/ this.localNode.broker
     }
-    setImpl(impl:(node:KnodeBase)=>ConnectionImpl){
-        this._impl = impl(this.localNode)
-        return this
-    }
+    // setBroker(b:BrokerBase):this{
+    //     this._broker = b
+    //     b[kInit](delegateCreateConn(this.localNode))
+    //     return this
+    // }
     public get status() {
         return this._status;
     }
@@ -56,44 +120,70 @@ export class KonnectionBase<TRaw=any> extends EventEmitter
         this.emit("status",v,prev)
     }
     
-    [kSetIndex](idx:number){
-        this._index = idx
+    [kSetIndex](idx:number,nid:symbol){
+        this._index[nid] = idx
         return this
     }
-    [kGetIndex](){
-        return this._index
+    [kGetIndex](nid:symbol){
+        let idx =  this._index[nid]
+        if(idx===undefined) return -1
+        return idx
     }
-    static from<TRaw>(localNode:KnodeBase,raw?:TRaw){
+    static [kCreate]<TRaw>(localNode:KnodeBase,raw?:TRaw){
         return new this(localNode,raw)
     }
-    protected constructor(localNode:KnodeBase,raw?:TRaw){
+    protected constructor(_localNode:KnodeBase,_raw?:TRaw){
         super({captureRejections:true})
+        this._index = {}
         this.status = "idle"
         this.intend = "unknown"
-        this.localNode = localNode
-        this.raw = raw
+        this.localNode = _localNode
+        this.raw = _raw
         this.on("connection",()=>this.status = "established")
         this.on("close",()=>this.status = "idle")
         this.on("error",(err)=>console.error("Err From Impl",err)) // disable Uncaught Message
-        this.on("close",()=>this.localNode[kRemoveKn](this))
+        
+        this.on("connection",()=>{
+            if(!this.localNode) throw Error("emited on a dissociative konnection")
+            this.localNode[kOnNewConn](this)
+            // this.localNode.emit("connection",this)
+            this.localNode.rawListeners("connection").map(l=>l(this))
+        })
+        this.on("close",()=>this.localNode[kOnClose](this))
         // this.resetListeners()
     }
+    /**
+     * cache a copy of the listeners added currently 
+     */
     bakeListeners() {
         this._bakedListeners = Object.fromEntries(
             this.eventNames().map(n => [n, this.rawListeners(n)])
         )
     }
+    /**
+     * retrieve the listeners cached by `bakeListeners`
+     */
     resetListeners(){
         this.removeAllListeners()
         for (let k in this._bakedListeners)
             for(let l of this._bakedListeners[k])
                 this.on(k,l)
     }
+    /**
+     * close the connection
+     * @param reason reserved
+     */
     close(reason?:any){
         // this.remoteAddress = null
         this.intend = "close"
-        this.impl.closeConnection(this,reason)
+        this.broker.close(this,reason)
     }
+    /**
+     * connect to remote address
+     * @param addr remote
+     * @param reason close for previous established connection, reserved
+     * @returns Promise
+     */
     connectTo(addr:Address,reason?:any){
         return new Promise<void>((res,rej)=>{
             if(this.status=="established"){
@@ -102,7 +192,7 @@ export class KonnectionBase<TRaw=any> extends EventEmitter
             this.status ="connecting"
             this.intend = "connect"
             this.remoteAddress = addr
-            this.impl.connectTo(this,addr).then(()=>{
+            this.broker.connect(this,addr).then(()=>{
                 // this.status = "established" // "connection" event is more convincing
                 res()
             },(err)=>{
@@ -111,20 +201,22 @@ export class KonnectionBase<TRaw=any> extends EventEmitter
             })
         }).catch(()=>{})
     }
+    
+    /**
+     * send data with impl immediately
+     * @param formedData the raw data to send
+     * @returns Promise
+     */
     /*protected*/ async rawSend(formedData:any):Promise<void>{
-        return await this.impl.sendTo(this,formedData)
+        return await this.broker.send(this,formedData)
     }
 
+    /**
+     * same as `rawSend`
+     */
     async send(formedData:any):Promise<void>{
         return await this.rawSend(formedData)
     }
-    // private async sendWithContext(ctx:Context){
-    //     if(!this._cb) return false
-    //     if(!this.established) return false
-    //     // let context = { conn, dataOut:data }
-    //     await this._cb("unform",ctx)
-    //     return this.localNode.impl.sendTo(this,ctx.dataOut)
-    // }
 }
 
 export interface KonnectionBase{
@@ -158,16 +250,14 @@ export interface KonnectionBase{
     on(event:"status",f:(status:ConnectionStatus,prev:ConnectionStatus)=>any):this;
     on(event:string,f:Function):this;
     
-    // emit(event:"connection",conn:KonnectionBase):boolean;
+    emit(event:"connection",conn:KonnectionBase):boolean;
     emit(event:"data",data:any):boolean;
     // emit(event:"push",data:any):boolean;
     emit(event:"close",data:any):boolean;
     emit(event:"error",err:Error):boolean;
-    emit(event:"aaa",...args:any):boolean;
     emit(event:string,...args:any[]):boolean;
     // emit(event:"status",status:ConnectionStatus,prev:ConnectionStatus):boolean;
 }
-// interface KonnectionBase extends KonnectionEmitter{}
 
 
 
@@ -176,29 +266,36 @@ export interface KonnectionBase{
 
 
 
-export class KnodeBase<TI = any,TO = any> extends EventEmitter{
 
+
+
+export class KnodeBase extends EventEmitter{
     connections:KonnectionBase[]
-    impl:ConnectionImpl    
+    broker:BrokerBase
+    id:symbol
+    protected getNextKnode:()=>KnodeBase
+    get nextKnode(){
+        return this.getNextKnode?.call(this)
+    }
+    // impl:ConnectionImpl    
     constructor(){
         super()
+        this.id = Symbol()
         this.connections = []
-        this.on("connection",conn=>{
-            this.connections.push(conn[kSetIndex](this.connections.length))
-            conn.localNode = this
-            // conn.resetListeners()
-
-            conn.emit("connection",conn)
-        })
     }
 
-    [kRemoveKn](conn:KonnectionBase){
+    [kOnNewConn](conn:KonnectionBase){
+        this.connections.push(conn[kSetIndex](this.connections.length,this.id))
+        this.nextKnode&&this.nextKnode[kOnNewConn](conn)
+        // this connection may be a redirected one!
+        // conn.localNode = this
+    }
+    [kOnClose](conn:KonnectionBase){
         let node = this
-        let taridx = conn[kGetIndex]()
-        conn[kSetIndex](-1) //mark as invalid
+        let taridx = conn[kGetIndex](this.id)
+        conn[kSetIndex](-1,this.id) //mark as invalid
         if(node.connections[taridx]!=conn){
             throw Error("not a valid connection")
-            return
         }
         if(taridx<0||taridx>=node.connections.length){
             throw Error("remove connection of an invalid index")
@@ -206,31 +303,30 @@ export class KnodeBase<TI = any,TO = any> extends EventEmitter{
         if(node.connections.length==taridx+1){
             node.connections.pop()
         }else{
-            let tail = node.connections.pop()[kSetIndex](taridx)
+            let tail = node.connections.pop()[kSetIndex](taridx,this.id)
             node.connections[taridx] = tail
         }
+        this.nextKnode&&this.nextKnode[kOnClose](conn)
     }
-    setImpl(impl:(node:KnodeBase)=>ConnectionImpl){
-        this.impl = impl(this)
-        return this
-    }
-    // ioType<NTI,NTO>(){
-    //     return this as any as Knode<NTI,NTO>
+    // setImpl(impl:(node:KnodeBase)=>ConnectionImpl){
+    //     this.impl = impl(this)
+    //     return this
     // }
-    private isConnectionArray(conn:any):conn is KonnectionBase[]{
-        return conn instanceof Array
+    setBroker(broker:BrokerBase){
+        broker[kInit](delegateCreateConn(this))
+        // return this
     }
-    sendTo(conn:KonnectionBase,data:TO):Promise<boolean>;
-    sendTo(connections:KonnectionBase[],data:TO):Promise<boolean>;
+    sendTo(conn:KonnectionBase,data:any):Promise<boolean>;
+    sendTo(connections:KonnectionBase[],data:any):Promise<boolean>;
     async sendTo(connections:any,data:any){
-        if(this.isConnectionArray(connections)){
+        if(connections instanceof Array){
             let results = await Promise.allSettled(connections.map(c=>c.send(data)))
             return results.length && results.reduce((a,b)=>a&&b)
         }
         return await connections.send(data);
     }
-    broadcast(data:TO):Promise<boolean>;
-    broadcast(cull:KonnectionBase,data:TO):Promise<boolean>;
+    broadcast(data:any):Promise<boolean>;
+    broadcast(cull:KonnectionBase,data:any):Promise<boolean>;
     broadcast(cull:any,data?:any){
         let targets = this.connections;
         if(!!data && (cull instanceof KonnectionBase)){
@@ -246,47 +342,34 @@ export class KnodeBase<TI = any,TO = any> extends EventEmitter{
      * @param reason reserved
      * @returns the created connection
      */
-    CreateConnectTo(addr:Address,reason?:any):KonnectionBase{
-        let conn = KonnectionBase.from(this)
-        conn.connectTo(addr,reason).catch(()=>{})
+    createConnection():KonnectionBase{
+        return KonnectionBase[kCreate](this)
+    }
+    connectTo(addr:Address,reason?:any){
+        let conn = this.createConnection()
+        if(addr) conn.connectTo(addr,reason).catch(()=>{})
         return conn
+    }
+    // CreateSourceConnection(){
+    //     this.broker.conn
+    // }
+    // CreatePassiveConnection(){
+
+    // }
+    override emit(e:any,...args:any[]):any{
+        throw Error("emitting on a knode is likely a wrong operation")
+    }
+    to(fn:()=>KnodeBase){
+        this.getNextKnode = fn
+        return this
     }
 }
 
 export interface KnodeBase{
     on(event:"connection",f:(conn:KonnectionBase)=>any):any;
-    emit(event:"connection",conn:KonnectionBase):boolean;
+    // emit(event:"connection",conn:KonnectionBase):boolean;
 }
 
 
 
 
-
-
-// let node = new KnodeBase()
-// let conn = KonnectionBase.from(node)
-// node.emit("connection",conn)
-
-// conn.emit("close",null)
-// node.emit("connection",conn)
-// conn.emit("close",null)
-
-// console.log(conn)
-
-
-// class A {
-//     foo(){
-//         this.bar()
-//     }
-//     bar(){
-//         console.log("bad")
-//     }
-// }
-
-// class B extends A{
-//     bar(){
-//         console.log("good")
-//     }
-// }
-
-// new B().foo()
