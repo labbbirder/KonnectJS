@@ -139,6 +139,14 @@ export class Konnection<TRaw=any> extends KonnectionBase<TRaw>{
         return this
     }
     callback(){
+    // use(fn:MiddlewareFunction){
+    //     if (typeof fn !== 'function') throw new TypeError('middleware must be a function!');
+    //     if (isGeneratorFunction(fn)) {
+    //         fn = convert(fn);
+    //     }
+    //     this.middlewares.push(fn)
+    //     return this
+    // }
         let fn = compose(this.middlewares)
         let cb = (eventType:EventType,ctx:Kontext)=>{
             ctx.eventType = eventType
@@ -199,29 +207,30 @@ export class Knode<TI=any,TO=any> extends KnodeBase<TI,TO>{
             shipContext("connection",{conn})
         })
     }
-    override setImpl(impl:(node:Knode)=>ConnectionImpl<Konnection>){
-        super.setImpl(impl)
+
+    override setBroker<T extends BrokerBase>(broker: T):Knode<T["incomeDataType"],T["outcomeDataType"]>{
+        super.setBroker(broker)
         return this
     }
 
     use<
         T extends (this:Konnection,...args:any[])=>MiddlewareFunction<TI,TO>,
         K extends Knode=Knode<TI,TO>
-    >(func:T,...args:Parameters<T>):NormalizedKnodeType<ReturnType<ReturnType<T>>,K>;
+    >(func:T):NormalizedKnodeType<ReturnType<ReturnType<T>>,K>;
     use<
         T extends (this:Konnection,...args:any[])=>MiddlewareFunction<TI,TO>,
         K extends Knode=Knode<TI,TO>
-    >(events:EventType[],func:T,...args:Parameters<T>):NormalizedKnodeType<ReturnType<ReturnType<T>>,K>;
-    use(filter:any,func?:any,...args:any[]):any{
+    >(filter:EventType[],func:T):NormalizedKnodeType<ReturnType<ReturnType<T>>,K>;
+    use(filter:any,func?:any):any{
+        if(this.getNextKnode) throw Error("cannot use after set next knode")
         let opt = {} as any
         if(filter instanceof Array<string>){
             opt = {
-                filter,func,args
+                filter,func
             }
         }else{
-            args.unshift(func)
             opt = {
-                func:filter,args
+                func:filter
             }
         }
         if(!!opt.func)this.midwareFactories.push(opt)
@@ -272,8 +281,10 @@ export function defineImpl<T extends ConnectionImplFactory>(f:T){
 
 
 
-export function defineMidware<T extends (this:Konnection,...args:any[])=>MiddlewareFunction>(f:T):T{
-    return f
+export function defineMidware<T extends (this:Konnection,arg:any,b:never)=>MiddlewareFunction>(f:T){
+    return function(...args:Parameters<T>){
+        return f.bind(this,...args) as T
+    }
 }
 
 
