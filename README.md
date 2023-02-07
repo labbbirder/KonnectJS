@@ -6,22 +6,35 @@
 An extremely flexible abstraction of node-connections structure, which designed for keep-in-connection using, can be fit with any type of network protocol
 
 this work is still in progress.
+which means:
+* breaking changes
+* documentation mistakes
+* uncovered usecase may fail
+* potential bugs
 
+however, the following are guaranteed:
+* covered usecases and examples
+* project integrity and consistency
+* document-based functions stability and reproducibility
+
+
+Calalog
 <!-- vscode-markdown-toc -->
 - [Concepts](#concepts)
   - [Konnection \& Knode](#konnection--knode)
-  - [Impl](#impl)
-- [Features](#features)
+  - [Broker](#broker)
+- [Purpose](#purpose)
 - [Installation](#installation)
 - [Getting Started](#getting-started)
   - [Start A WebSocket Server](#start-a-websocket-server)
   - [Start A Tcp Server](#start-a-tcp-server)
-  - [Remember The Connection](#remember-the-connection)
-  - [Run without Impl](#run-without-impl)
-  - [Flexible Connections](#flexible-connections)
+  - [Details On Use](#details-on-use)
+  - [Knode Concatenation](#knode-concatenation)
+  - [LowLevel Methods](#lowlevel-methods)
+  - [~~Flexible Connections~~(changed soon)](#flexible-connectionschanged-soon)
 - [Cascade Midwares](#cascade-midwares)
 - [Custom Midwares](#custom-midwares)
-- [Extend Implement](#extend-implement)
+- [Custom Brokers](#custom-brokers)
 - [Samples](#samples)
 
 <!-- vscode-markdown-toc-config
@@ -34,18 +47,24 @@ this work is still in progress.
 
 ### Konnection & Knode
 
-KonnectJS has two major concepts, which are 'Konnection' & 'Knode'. 
+KonnectJS has two major concepts, which are 'Konnection' & 'Knode' & 'Kontext'. 
+
 'Konnection' is for the same pronounce as 'Connection'(similarly hereinafter). 
+
 'Knode' is for the same pronounce as 'Node'(similarly hereinafter). 
-The ends of a connection are nodes. A node may has lots connections.
 
-### Impl
+'Kontext' is for the same pronounce as 'Context'(similarly hereinafter). 
 
-KonnectJS is only aware of the abstract structure. We just tell it what to do when a connection on establish, closed, transfer or error occurs. That is to say, the Konnect dont drives itself. We should set a event-based driver by calling `setImpl`. 
-For the most time, a impl is something like network protocol. However, that is not to say that Konnect can only deal with networking using.
+The ends of a connection are nodes. A node generally has lots of connections. A connection has some Kontext. Application data is treated on a Kontext.
+
+### Broker
+
+KonnectJS is only aware of the abstract structure. We just tell it what to do when a connection on establish, closed, transfer or error occurs. That is to say, the Konnect dont has network implements itself. We should set a event-based driver by calling `setBroker`. 
+
+For the most time, a broker is something like network protocol. However, that is not to say that Konnect can only deal with networking using.
 
 
-## Features
+## Purpose
 
 For business coders, the only thing to think about is to defines how the node acts with connection events, such as:
 
@@ -62,19 +81,15 @@ Sometimes, there is no sense for business coders to worry about what protocol to
 * set how connection is established, for example extra handshake, authentication and so on
 * 
 ## Installation
-clone the source code:
-```sh
-> git clone git@github.com:labbbirder/KonnectJS.git
-```
 
-~or install from npmjs:~ (not yet)
+install from npmjs:
 
 ```sh
-> npm i -S KonnectJS
+> npm i -S konnectjs
 ```
 when you installed the project successfully, it's time to import to your script:
 ```typescript
-import { Knode,Konnection } from 'KonnectJS'
+import { Knode,Konnection } from 'konnectjs'
 ```
 ## Getting Started
 ### Start A WebSocket Server
@@ -101,36 +116,55 @@ let node = new Knode()
     console.log("tcp event", ctx.eventType, ctx.dataIn)
 })
 ```
-### Remember The Connection
+### Details On Use
 And you may want to know who the connection is, and want some code persistent for the same connection to be retrieved, here is the example:
 ```typescript
-import { Knode,Konnection } from 'KonnectJS'
-import { KonnectTCP } from 'Konnect-tcp'
+import { Knode,Konnection } from 'konnectjs'
 
 let node = new Knode()
-.setImpl(KonnectTCP({ port:3000,isServer:true })) 
-.use(()=>{
-    // for a new connection here...
-    let session = {}
-    let lastEventTime = 0
-
-    return ctx=>{ // the returned function is called multiple times
-        if(!!lastEventTime){
-            console.log("i remember you", ctx.eventType, ctx.data)// we can retrieve here
-            console.log("last message from you is on", lastEventTime)
-        }else{
-            console.log("hello, new connection")
-        }
-        session.data = ctx.data
-        lastEventTime = Date.now()
+.use(function(){ // called on conenction instantiation
+    console.log(this) // output: Konnection Instance
+    let connection_session = {event_count:0}
+    return ctx=>{ // called when events emitted on this connection
+        connection_session.event_count += 1
     }
 })
 ```
-The scope of `let session = {}` is initialized the time as the connection established. The data under the scope is saved respectively.
-### Run without Impl
+
+### Knode Concatenation
+It's recommeded to split use-chain properly into pieces. Generally, the one in head is for *Protocol Layer*, the following one is for *Application Layer*.
+
+KonnectJS implement this logic by **Knode.to**, here is an example:
+```typescript
+/* start of two protocol layers */
+let tcpNode = new Knode()
+.setBroker(new TcpBroker({port:3000,isPublic:true}))
+.use(stream_to_packet())
+.use(reconnect())
+.use(heartbeat())
+.to(()=>appNode) // continue with appNode
+
+let wsNode = new Knode()
+.setBroker(new WebSocketBroker(port:3001,isPublic:true))
+.use(heartbeat())
+.to(()=>appNode) // continue with appNode
+
+
+/* start of application layer */
+let appNode = new Knode()
+.use(reform_io<string>({
+    former:i=>i.toString(),
+    unformer:o=>Buffer.from(o),
+}))
+.use(()=>ctx=>{
+    // your application code here...
+})
+```
+
+### LowLevel Methods
 this example shows how to drive it manually:
 ```typescript
-import { Knode,Konnection } from 'KonnectJS'
+import { Knode,Konnection } from 'konnectjs'
 
 let node = new Knode()
 node.use(()=>(ctx)=>{
@@ -138,10 +172,11 @@ node.use(()=>(ctx)=>{
 })
 
 let conn = new Konnection(node)
-node.emit("connection",conn) // establish a connection manually
-conn.emit("data","hello there") // transfer a data via connection manually
+conn.emit("connection") // make a connection established manually
+conn.emit("data","hello there") // put a data on connection manually
+conn.emit("close") // close connection manually
 ```
-### Flexible Connections
+### ~~Flexible Connections~~(changed soon)
 And you may what to keep a standalone connection to another server with different logic, here comes an example:
 
 ```typescript
@@ -172,11 +207,10 @@ connA.use((ctx,next)=>{
 the midware here is similar to which of [koa](https://github.com/koajs/koa)
 
 ```typescript
-import { Knode,Konnection } from 'KonnectJS'
+import { Knode,Konnection } from 'konnectjs'
 const sleep = (ms:number)=>new Promise(res=>setTimeout(res,ms))
 
 let node = new Knode()
-node.setImpl(KonnectWS({ port:3000 })) 
 .use(()=>async (ctx,next)=>{
     console.log("start")
     await next()
@@ -193,67 +227,55 @@ node.setImpl(KonnectWS({ port:3000 }))
 ```
 
 ## Custom Midwares
-here is an example of json parser midware:
+here is an example of json parser midware ( set `jsonIn` field on Kontext when has dataIn):
 ```typescript
-interface Context{ // declaration here
-    json: any
+// json_data.ts
+
+import { defineMidware } from "konnectjs";
+
+declare module "konnectjs"{
+    export interface Kontext{
+        jsonIn?:any
+    }
 }
-```
-```typescript
-// how it transforms
-let KnonectJson = defineMidware((options?:any)=>async (ctx,next)=>{
-    ctx.json = JSON.parse(ctx.dataIn)
-    await next()
-    ctx.dataOut?.map(o=>JSON.stringify(o))
-})
-```
-defineMidware does nothing but return the origin function. Coders can benefit from it by code autocompletion
-```typescript
-import { Knode,Konnection } from 'KonnectJS'
-import { KnonectJson } from 'KnonectJson'
 
-let node = new Knode()
-node.setImpl(KonnectWS({ port:3000,isServer:true })) // use your midware
-.use(KnonectJson())
-.use(()=>async (ctx,next)=>{
-    console.log("data in json", ctx.json)
-})
-
-```
-## Extend Implement
-On the most time, you'll need `defineImpl` function.
-here is an example of websocket implement:
-```typescript
-import { WebSocketServer } from "ws"
-import { Konnection, defineImpl } from "./KonnectJS/Konnect"
-
-export let KonnectWS = defineImpl((wss:WebSocketServer)=>(node)=>{
-    wss.on("connection",ws=>{
-        let conn = new Konnection(node,ws)
-        ws.on("message",(data:Buffer)=>{
-            conn.emit("data",data)
-        })
-        ws.on("close",(code,reason)=>{
-            conn.emit("close",{code,reason})
-        })
-        ws.on("error",err=>{
-            conn.emit("error",err)
-        })
-        node.emit("connection",conn)
-    })
-    return {
-        closeConnection(conn,code,reason){
-            conn.close(code,reason)
-            return true
-        },
-        sendTo(conn:Konnection<WebSocket>,data) {
-            conn.raw.send(data)
-            return true
-        },
+export let json_data = defineMidware(function(){
+    return (ctx,next)=>{
+        if(ctx.dataIn) ctx.jsonIn = JSON.parse(ctx.dataIn)
     }
 })
 ```
-defineImpl does nothing but return the origin function. Coders can benefit from it by code autocompletion
+
+```typescript
+// index.js
+import {json_data} from "./json_data"
+import { Knode,Konnection } from 'KonnectJS'
+
+let node = new Knode()
+.use(json_data())
+.use(["data"],()=>async (ctx,next)=>{
+    console.log("data in json", ctx.jsonIn)
+})
+
+```
+## Custom Brokers
+To implement a custom broker, extends `BrokerBase`.
+
+remeber do the follwing things in subclass:
+
+required:
+
+* emit: `connection`, `close`, `data`, `error`
+* implement: `send`, `close`, `connect`, `shutdown`
+
+optional:
+
+* setType `incomeDataTye` `outcomeDataType`
+
+check the example brokers:
+* [konnect-ws](https://github.com/labbbirder/KonnectJS/blob/main/packages/konnect-ws): implement of websocket
+* [konnect-tcp](https://github.com/labbbirder/KonnectJS/blob/main/packages/konnect-tcp): implement of socket tcp
+* [konnect-local](https://github.com/labbbirder/KonnectJS/blob/main/packages/konnect-local): implement of local event
 
 ## Samples
 there are alse samples [here](https://github.com/labbbirder/KonnectJS/blob/main/samples):
