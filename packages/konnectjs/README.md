@@ -10,6 +10,7 @@ this work is still in progress.
 - [Basic Usage](#basic-usage)
   - [Start A WebSocket Server](#start-a-websocket-server)
   - [Start A Tcp Server](#start-a-tcp-server)
+  - [Hybrid Server](#hybrid-server)
 - [Documentation](#documentation)
 
 <!-- vscode-markdown-toc-config
@@ -33,28 +34,61 @@ import { Knode,Konnection } from 'KonnectJS'
 ### Start A WebSocket Server
 the code below illustrates how a websocket server is created:
 ```typescript
-import { Knode,Konnection } from 'KonnectJS'
-import { KonnectWS } from 'Konnect-ws'
+import { Knode,Konnection } from 'konnectjs'
+import { WebSocketBroker } from 'konnect-ws'
 
 let node = new Knode()
-.setImpl(KonnectWS({ port:3000, isServer:true })) // Immediately listen on 3000, and communicate with websocket
+.setBroker(new WebSocketBroker({ port:3000, isPublic:true })) // Immediately listen on 3000, and communicate with websocket
 .use(()=>ctx=>{
-    console.log("websocket message", ctx.eventType, ctx.data)
+    console.log("websocket message", ctx.eventType, ctx.dataIn)
 })
 ```
 ### Start A Tcp Server
 the code below illustrates how a tcp server is created:
 ```typescript
-import { Knode,Konnection } from 'KonnectJS'
-import { KonnectTCP } from 'Konnect-tcp'
+import { Knode,Konnection } from 'konnectjs'
+import { TcpBroker } from 'konnect-tcp'
 
 let node = new Knode()
+.setBroker(new TcpBroker({ port:3000, isPublic:true })) // now it's upon TCP
 .use(()=>ctx=>{
-    console.log("tcp data", ctx.eventType, ctx.data)
+    console.log("tcp data", ctx.eventType, ctx.dataIn)
 })
-.setImpl(KonnectTCP({ port:3000, isServer:true })) // the invoking order of setImpl does not matter
 ```
+### Hybrid Server
+the code below illustrates how a server accepting either WebScoket or TCP connections!
+```typescript
+import { Knode,Konnection } from 'konnectjs'
+import { TcpBroker } from 'konnect-tcp'
+import { WebSocketBroker } from 'konnect-ws'
 
+
+let wsNode = new Knode() // websocket
+.setBroker(new WebSocketBroker({ port:3000, isPublic:true }))
+.use(()=>(ctx,next)=>{
+  console.log("raw WebSocket",ctx.eventType)
+  next()
+})
+.to(()=>endNode) // continue with endNode
+
+
+let tcpNode = new Knode() // tcp
+.setBroker(new TcpBroker({ port:3000, isPublic:true }))
+.use(()=>(ctx,next)=>{
+  console.log("raw TCP",ctx.eventType)
+  next()
+})
+.to(()=>endNode) // continue with endNode
+
+
+let endNode = new Knode()
+.use(()=>(ctx)=>{
+  // both TCP and WS events are redirected here
+  console.log("application event",ctx.eventType) 
+  ctx.send(ctx.dataIn) // send back
+})
+
+```
 ## Documentation
 See full document [here](https://github.com/labbbirder/KonnectJS/blob/main/README.md)
 

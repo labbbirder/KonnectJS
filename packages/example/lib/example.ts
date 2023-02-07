@@ -1,7 +1,7 @@
-import { heartbeat, KonnectHeartbeat, KonnectReconnect,reconnect,stream_to_packet } from "konnect-proto";
+import { heartbeat, reconnect,stream_to_packet } from "konnect-proto";
 import { TcpBroker } from "konnect-tcp";
-import { KonnectWS } from "konnect-ws";
-import { DebugEvent, debug_event, Knode, ReformIO, reform_io } from "konnectjs";
+import { WebSocketBroker } from "konnect-ws";
+import { debug_event, Knode, reform_io } from "konnectjs";
 
 
 new Knode()
