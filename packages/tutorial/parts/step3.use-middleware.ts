@@ -1,14 +1,11 @@
-import { Knode, ReformIO } from "konnectjs";
+// import { Knode, reform_io } from "konnectjs";
 
-new Knode()
+// new Knode()
 
-.use(ReformIO<Buffer,string>,/*...args*/)
+// .use(reform_io<Buffer,string>())
 
-// the same as:
-.use( ()=>ReformIO<Buffer,Buffer>(/*...args*/) )
+// // for "data" event only
+// .use(["data"], reform_io<Buffer>())
 
-// for "data" event only
-.use(["data"], ReformIO<Buffer>)
-
-// for "data" "connection" only
-.use(["data","connection"], ReformIO<Buffer>) 
+// // for "data" "connection" only
+// .use(["data","connection"], ReformIO<Buffer>) 

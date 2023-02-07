@@ -1,14 +1,13 @@
-import { KonnectTCP } from "konnect-tcp"
-import { DebugEvent, Knode, ReformIO } from "konnectjs"
+import { TcpBroker } from "konnect-tcp"
+import { debug_event, Knode, reform_io } from "konnectjs"
 
 new Knode()
-.setImpl(KonnectTCP({port:3000,isServer:true}))
-.use(ReformIO<Buffer>)
+.setBroker(new TcpBroker({port:3000,isPublic:true}))
+.use(reform_io<Buffer>)
 
-.use(DebugEvent,{prefix:"transfer"})
-.use(ReformIO<string>,{
+.use(debug_event({prefix:"net event"}))
+.use(reform_io<string>({
     former:input=>input.toString(),
     unformer:output=>Buffer.from(output),
-})
-
-.use(["data","connection","close"],DebugEvent,{prefix:"application"})
+}))
+.use(["data"],debug_event({prefix:"app data"}))

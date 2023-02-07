@@ -1,4 +1,3 @@
-// import {describe, expect, test} from '@jest/globals';
 import { Knode, Konnection } from "../lib";
 test("connection scope",()=>{
     // // console.log("test 1")
