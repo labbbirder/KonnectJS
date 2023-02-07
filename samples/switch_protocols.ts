@@ -1,6 +1,6 @@
-import { FilterEvent, Knode, Konnection, ReformIO } from "KonnectJS";
-import { KonnectWS } from "Konnect-ws";
-import { KonnectTCP } from "Konnect-tcp";
+import { filter_event, Knode, Konnection, reform_io } from "KonnectJS";
+import { WebSocketBroker } from "Konnect-ws";
+import { TcpBroker } from "Konnect-tcp";
 
 const NETWORK_CONFIG = {
     /**
@@ -15,12 +15,12 @@ const NETWORK_CONFIG = {
 
 const NETWORK_IMPLEMENT = ({
     tcp:{
-        server:KonnectTCP({port:NETWORK_CONFIG.port,isServer:true}),
-        client:KonnectTCP({isServer:false}),
+        server:()=>new TcpBroker({port:NETWORK_CONFIG.port,isPublic:true}),
+        client:()=>new TcpBroker({isPublic:false}),
     },
     ws:{
-        server:KonnectWS({port:NETWORK_CONFIG.port,isServer:true}),
-        client:KonnectWS({isServer:false}),
+        server:()=>new WebSocketBroker({port:NETWORK_CONFIG.port,isPublic:true}),
+        client:()=>new WebSocketBroker({isPublic:false}),
     }
 })[NETWORK_CONFIG.proto]
 
@@ -28,11 +28,11 @@ export function startServer(){
     console.log("start")
     let globalClientID = 0
     let node = new Knode()
-    .setImpl(NETWORK_IMPLEMENT.server)
-    .use(ReformIO<string>, { // reform network io from Buffer to string
+    .setBroker(NETWORK_IMPLEMENT.server())
+    .use(reform_io<string>({ // reform network io from Buffer to string
         former:b=>b.toString(),
         unformer:s=>Buffer.from(s),
-    })
+    }))
     .use(()=>{
         globalClientID+=1
         let id = globalClientID
@@ -52,15 +52,15 @@ export function startServer(){
 
 export function startClient(){
     let node = new Knode()
-    .setImpl(NETWORK_IMPLEMENT.client)
-    .use(ReformIO<string>, { // reform network io from Buffer to string
+    .setBroker(NETWORK_IMPLEMENT.client())
+    .use(reform_io<string>( { // reform network io from Buffer to string
         former:b=>b.toString(),
         unformer:s=>Buffer.from(s),
-    })
-    .use(FilterEvent,["data"])
+    }))
+    .use(filter_event(["data"]))
     .use(()=>ctx=>console.log(ctx.dataIn))
 
-    return node.CreateConnectTo({url:"127.0.0.1:3000"})
+    return node.connectTo({url:"127.0.0.1:3000"})
 }
 
 /*

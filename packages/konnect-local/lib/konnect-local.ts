@@ -1,35 +1,38 @@
-import { defineImpl,Knode,Konnection } from "konnectjs";
+import { Address, BrokerBase,Knode,Konnection, KonnectionBase } from "konnectjs";
 type Raw = {
-    remote:Connection|null
+    remote:Konnection<Raw>|null
 }
-type Connection = Konnection<Raw>
+export class  LocalBroker extends BrokerBase<Raw>{
+    incomeDataType: any;
+    outcomeDataType: any;
+    raw?: any;
+    async send(conn: KonnectionBase<{ remote: any; }>, data: any) {
+        if(conn.raw.remote==null) return Promise.reject()
+        conn.raw.remote.emit("data",data)
+    }
+    close(conn: KonnectionBase<{ remote: any; }>, reason: any): Promise<void> {
+        conn.raw.remote?.emit("close",reason)
+        conn.raw.remote = null
+        return Promise.resolve()
+    }
+    connect(conn: KonnectionBase<{ remote: any; }>, addr: Address): Promise<void> {
+        if(!(addr instanceof Knode)) {
+            throw new Error("KonnectLocal can only connect to Knode")
+        }
+        let rn = addr as any as Knode
+        if(!!addr){
+            let rmtConn = rn.createConnection()
+            rmtConn.raw = {remote:conn}
+            rmtConn.emit("connection",rmtConn)
 
-export let KonnectLocal = defineImpl(()=>node=>{
-    return {
-        async sendTo(conn:Connection, data) {
-            if(conn.raw.remote==null) return Promise.reject()
-            conn.raw.remote.emit("data",data)
-        },
-        closeConnection(conn:Connection, reason) {
-            conn.raw.remote?.emit("close",reason)
-            conn.raw.remote = null
+            conn.raw = {remote:rmtConn as any}
+            conn.emit("connection",conn)
             return Promise.resolve()
-        },
-        async connectTo(conn:Connection, addr) {
-            if(!(addr instanceof Knode)) {
-                throw new Error("KonnectLocal can only connect to Knode")
-            }
-            let rn = addr as any as Knode
-            if(!!addr){
-                let rmtConn = Konnection.from(rn,{remote:conn})
-                rn.emit("connection",rmtConn)
-
-                conn.raw = {remote:rmtConn as any}
-                node.emit("connection",conn)
-                return Promise.resolve()
-            }
-            return Promise.reject()
-        },
+        }
+        return Promise.reject()
+    }
+    async shutdown?(){
         
     }
-})
+
+}

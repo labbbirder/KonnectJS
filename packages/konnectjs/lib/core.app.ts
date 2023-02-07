@@ -24,7 +24,7 @@ export interface BrokerOption {
     /**
      * whether can be connectioned by remotes
      */
-    isPublic:boolean
+    isPublic?:boolean
 }
 
 /**
@@ -186,7 +186,7 @@ export class KonnectionBase<TRaw=any> extends EventEmitter
      */
     connectTo(addr:Address,reason?:any){
         return new Promise<void>((res,rej)=>{
-            if(this.status=="established"){
+            if(this.status==="established"){
                 this.close()
             }
             this.status ="connecting"
@@ -199,7 +199,7 @@ export class KonnectionBase<TRaw=any> extends EventEmitter
                 this.status = "idle"
                 rej(err)
             })
-        }).catch(()=>{})
+        })//.catch(()=>{})
     }
     
     /**
@@ -314,6 +314,7 @@ export class KnodeBase extends EventEmitter{
     // }
     setBroker(broker:BrokerBase){
         broker[kInit](delegateCreateConn(this))
+        this.broker = broker
         // return this
     }
     sendTo(conn:KonnectionBase,data:any):Promise<boolean>;
@@ -345,10 +346,10 @@ export class KnodeBase extends EventEmitter{
     createConnection():KonnectionBase{
         return KonnectionBase[kCreate](this)
     }
-    connectTo(addr:Address,reason?:any){
+    connectTo(addr:Address,reason?:any):ReturnType<this["createConnection"]>{
         let conn = this.createConnection()
-        if(addr) conn.connectTo(addr,reason).catch(()=>{})
-        return conn
+        if(addr) conn.connectTo(addr,reason)//.catch(()=>{})
+        return conn as any
     }
     // CreateSourceConnection(){
     //     this.broker.conn

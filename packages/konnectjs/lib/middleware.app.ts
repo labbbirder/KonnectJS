@@ -3,11 +3,13 @@ import compose from 'koa-compose'
 import convert from 'koa-convert'
 import { Logger } from 'ts-log'
 import { isGeneratorFunction } from 'util/types'
-import {Address, ConnectionImpl, KnodeBase,KonnectionBase} from "./core.app"
+import { WebSocketServer,WebSocket } from 'ws'
+import {Address, BrokerBase, BrokerOption, KnodeBase,KonnectionBase} from "./core.app"
 import { logger as defaultLogger } from './logger'
+import { UrlData } from './utils'
 
 const kCallback = Symbol()
-const kComplete = Symbol()
+const kCreate   = Symbol()
 const kCtxStck  = Symbol()
 const kCrtCtx   = Symbol()
 
@@ -65,7 +67,7 @@ function shipContext(e:EventType,o:AuthorType<KontextContent>){
         }else{
             stack.pop()
         }
-        
+
         if(!ctx?.dataOut || !(ctx?.dataOut instanceof Array)) return
         ctx.dataOut.forEach(data => {
             conn.rawSend(data)
@@ -77,7 +79,7 @@ function shipContext(e:EventType,o:AuthorType<KontextContent>){
 
 export class Konnection<TRaw=any> extends KonnectionBase<TRaw>{
     middlewares:    MiddlewareFunction[]
-    [kCtxStck]:     Kontext[]
+    [kCtxStck]:     Kontext[] //TODO: remove me
 
     override localNode: Knode
     private _cb:(eventType: EventType, ctx: Kontext) => Promise<void>
@@ -86,9 +88,10 @@ export class Konnection<TRaw=any> extends KonnectionBase<TRaw>{
         return this._cb ||= this.callback();
     }
     
-    static from<TRaw>(localNode:Knode,raw?:TRaw){
+    static [kCreate]<TRaw>(localNode:Knode,raw?:TRaw){
         return new this(localNode,raw)
     }
+
     /**
      * create a konnection from a local knode, use its middlewares. if middlewares \
      * asd changes later, call `refresh` manually to catch up.
@@ -110,13 +113,9 @@ export class Konnection<TRaw=any> extends KonnectionBase<TRaw>{
         this.bakeListeners()
     }
 
-    /**
-     * refetch middlewares from local knode
-     */
-    refresh(){
-        this.middlewares = []
-        for(let fac of this.localNode.midwareFactories){
-            let rawcb = fac.func.call(this,...fac.args)
+    private useKnode(node:Knode){
+        for(let fac of node.midwareFactories){
+            let rawcb = fac.func.call(this)
             let cb = rawcb
             if(fac.filter){
                 cb = async (ctx:Kontext,next:Function)=>{
@@ -126,27 +125,22 @@ export class Konnection<TRaw=any> extends KonnectionBase<TRaw>{
                     next()
                 }
             }
-            this.use(cb)
+            this.middlewares.push(cb)
         }
+        if(node.nextKnode) this.useKnode(node.nextKnode)
+    }
+
+    /**
+     * refetch middlewares from local knode
+     */
+    refresh(){
+        this.middlewares = []
+        this.useKnode(this.localNode)
         this._cb = this.callback()
     }
-    use(fn:MiddlewareFunction){
-        if (typeof fn !== 'function') throw new TypeError('middleware must be a function!');
-        if (isGeneratorFunction(fn)) {
-            fn = convert(fn);
-        }
-        this.middlewares.push(fn)
-        return this
-    }
-    callback(){
-    // use(fn:MiddlewareFunction){
-    //     if (typeof fn !== 'function') throw new TypeError('middleware must be a function!');
-    //     if (isGeneratorFunction(fn)) {
-    //         fn = convert(fn);
-    //     }
-    //     this.middlewares.push(fn)
-    //     return this
-    // }
+
+    private callback(){
+        // if(this._cb) return this._cb
         let fn = compose(this.middlewares)
         let cb = (eventType:EventType,ctx:Kontext)=>{
             ctx.eventType = eventType
@@ -158,6 +152,7 @@ export class Konnection<TRaw=any> extends KonnectionBase<TRaw>{
         }
         return cb
     }
+
     override async send(formedData:any):Promise<void>{
         let contexts = this[kCtxStck]
         if(!this[kCtxStck].length){
@@ -170,20 +165,13 @@ export class Konnection<TRaw=any> extends KonnectionBase<TRaw>{
             ctx.send(formedData)
         }
     }
-    // [kComplete](ctx:Kontext){
-    //     // if(this[kCtxStck].at(-1)!==ctx){
-    //     //     //Fix Me: dataOut was settled on another new context, this may cause unexpectedness
-    //     //     // throw Error("context stack check failed")
-    //     //     let idx = this[kCtxStck].lastIndexOf(ctx)
-    //     //     if(~idx) this[kCtxStck].splice(idx,1)
-    //     // }
-    //     // this[kCtxStck].pop()
-    //     if(!ctx?.dataOut || !(ctx?.dataOut instanceof Array)) return
-    //     ctx.dataOut.forEach(data => {
-    //         super.rawSend(data)
-    //     });
-    //     this.emit("complete")
-    // }
+
+    async emitOneByOne(event: string, ...args:any[]) {
+        // one by one
+        for(let l of this.rawListeners(event)){
+            await l(...args)
+        }
+    }
 }
 
 
@@ -192,13 +180,16 @@ export class Konnection<TRaw=any> extends KonnectionBase<TRaw>{
 
 
 
-export class Knode<TI=any,TO=any> extends KnodeBase<TI,TO>{
+export class Knode<TI=any,TO=any> extends KnodeBase{
     midwareFactories:{
-        func:(...args:any[])=>MiddlewareFunction,
+        func:()=>MiddlewareFunction,
         filter?:EventType[]
-        args:any[],
+        // args:any[],
     }[] = []
-    
+    override get nextKnode(): Knode {
+        return super.nextKnode as Knode
+    }
+
     constructor(){
         super()
         this.connections = []
@@ -236,18 +227,12 @@ export class Knode<TI=any,TO=any> extends KnodeBase<TI,TO>{
         if(!!opt.func)this.midwareFactories.push(opt)
         return this as any
     }
-    override CreateConnectTo(addr:Address,reason?:any):Konnection{
-        let conn = Konnection.from(this)
-        conn.connectTo(addr,reason).catch(()=>{})
-        return conn
-    }
-    override async emit(event: string, ...args:any[]) {
-        // one by one
-        for(let l of this.rawListeners(event)){
-            await l(...args)
-        }
-    }
+    
+    override createConnection():Konnection{
+        return Konnection[kCreate](this)
+    }    
 }
+
 
 export interface Knode{
     on(event:"connection",f:(conn:Konnection)=>any):any;
@@ -274,42 +259,49 @@ type NormalizedKnodeType<T,TK extends Knode = Knode> = TK extends Knode<infer TI
 
 
 
-type ConnectionImplFactory<TRaw=any> = (...args:any[])=>(node:Knode)=>ConnectionImpl<Konnection<TRaw>>
-export function defineImpl<T extends ConnectionImplFactory>(f:T){
-    return f
+
+
+
+
+
+
+
+
+export function defineMidware<T extends (this: Konnection, ...args: any[]) => MiddlewareFunction>(f: T) {
+    return (...args: Parameters<T>) => function () {
+        return f.call(this, ...args)
+    } as (this: Konnection) => ReturnType<T>
 }
 
 
-
-export function defineMidware<T extends (this:Konnection,arg:any,b:never)=>MiddlewareFunction>(f:T){
-    return function(...args:Parameters<T>){
-        return f.bind(this,...args) as T
+export let reform_input = <T>(opt: { former?: (d: any) => T } = {}) =>
+    () => (ctx: Kontext, next: Function) => {
+        if (opt?.former) ctx.dataIn &&= opt.former(ctx.dataIn)
+        return next() as SetContextType<"TI", T>
     }
-}
 
+export let reform_output = <T>(opt: { unformer?: (d: T) => any } = {}) =>
+    () => async (ctx: Kontext, next: Function) => {
+        await next()
+        if (opt?.unformer) { ctx.dataOut = ctx.dataOut?.map(d => opt.unformer(d)) }
+        return null as SetContextType<"TO", T>
+    }
 
+export let reform_io = <TI, TO = TI>(opt: { former?: (d: any) => TI, unformer?: (d: TO) => any } = {}) =>
+    () => async (ctx: Kontext, next: Function) => {
+        if (opt?.former) { ctx.dataIn &&= opt.former(ctx.dataIn) }
+        await next()
+        if (opt?.unformer) { ctx.dataOut = ctx.dataOut?.map(d => opt.unformer(d)) }
+        return null as SetContextType<"TIO", TI, TO>
+    }
 
-export let ReformInput = defineMidware(<T>(opt:{former?:(d:any)=>T}={})=>(ctx,next)=>{
-    if(opt?.former) ctx.dataIn &&= opt.former(ctx.dataIn)
-    return next() as SetContextType<"TI",T>
+export let filter_event = defineMidware((filter: EventType[], options?: { exlucde?: boolean }) => (ctx, next) => {
+    if (!(~filter.indexOf(ctx.eventType)) == !!(options?.exlucde)) next()
 })
-export let ReformOutput = defineMidware(<T>(opt:{unformer?:(d:T)=>any} = {})=>async(ctx,next)=>{
-    await next()
-    if(opt?.unformer) {ctx.dataOut = ctx.dataOut?.map(d=>opt.unformer(d))}
-    return null as SetContextType<"TO",T>
-})
-export let ReformIO = defineMidware(<TI,TO=TI>(opt:{former?:(d:any)=>TI,unformer?:(d:TO)=>any}={})=>async(ctx,next)=>{
-    if(opt?.former) {ctx.dataIn &&= opt.former(ctx.dataIn)}
-    await next()
-    if(opt?.unformer) {ctx.dataOut = ctx.dataOut?.map(d=>opt.unformer(d))}
-    return null as SetContextType<"TIO",TI,TO>
-})
-export let FilterEvent = defineMidware((filter:EventType[],options?:{exlucde?:boolean})=>(ctx,next)=>{
-    if(!(~filter.indexOf(ctx.eventType))==!!(options?.exlucde)) next()
-})
+
 
 const kDebugEventIndent = Symbol()
-const kDebugEventDepth = Symbol()
+const kDebugEventDepth  = Symbol()
 const packDebugData = (name:string,value:any)=>value?name+": "+
     (value instanceof Buffer?`<Buffer ${value}>`:`'${value}'`) + " "
     :''
@@ -320,7 +312,7 @@ const packDebugMessage=(ctx:Kontext,prefix:string,isStart:boolean)=> ""
     + packDebugData("out",ctx.dataOut)
     + packDebugData("err",ctx.error)
 
-export let DebugEvent = defineMidware((opt?:{prefix?:string,indent?:number,logger?:Logger})=>async (ctx,next)=>{
+export let debug_event = defineMidware((opt?:{prefix?:string,indent?:number,logger?:Logger})=>async (ctx,next)=>{
     let {logger,indent,prefix} = {
         prefix:"",
         logger:defaultLogger,
@@ -343,23 +335,10 @@ export let DebugEvent = defineMidware((opt?:{prefix?:string,indent?:number,logge
 })
 
 
-// let node = new Knode()
-// .use(()=>async (ctx,next)=>{
-//     ctx.dataIn &&= Buffer.from(ctx.dataIn)
-//     await next()
-//     ctx.dataOut?.map(d=>d.toString())
-//     return null as SetContextType<"TIO",Buffer,Buffer>
-// })
-// .use(()=>(ctx,next)=>{
-//     console.log(ctx.eventType,ctx.dataIn)
-//     ctx.send(Buffer.from("yes"))
-//     next()
-// })
-// .use(()=>(ctx,next)=>{
-//     ctx.send(Buffer.from("no"))
-// })
-// let c1 = Konnection.from(node)
-// let c2 = Konnection.from(node)
-// let c3 = Konnection.from(node)
+export {
+    BrokerBase,Address,BrokerOption,KonnectionBase
+}
 
-// node.emit("connection",c1)
+
+
+

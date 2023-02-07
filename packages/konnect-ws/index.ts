@@ -1,58 +1,64 @@
 import { WebSocket, WebSocketServer } from "ws"
-import { defineImpl, UrlData, Konnection } from "konnectjs"
+import { UrlData, KonnectionBase, Address, BrokerBase, BrokerOption } from "konnectjs"
 
-function setupWebSocket(ws:WebSocket,conn:Konnection){
-    ws.on("message",(data:Buffer)=>{
-        conn.emit("data",data)
-    })
-    ws.on("close",(code,reason)=>{
-        conn.emit("close",reason)
-    })
-    ws.on("error",err=>{
-        conn.emit("error",err)
-    })
+type WsOption = BrokerOption & {
+    port?:number
 }
-type FirstContrustorParamType<T> = T extends new (r: infer U, ...args:any[])=>any?U:never
-type WssOption = Exclude<FirstContrustorParamType<typeof WebSocketServer>,undefined>
-interface Options extends WssOption{
-    isServer?:boolean
-}
-
-export let KonnectWS = (defineImpl((opt:Options = {})=>(node)=>{
-    let wss;
-    if(!!opt.isServer){
-        wss = new WebSocketServer(opt)
-        wss.on("connection",ws=>{
-            let conn = Konnection.from(node,ws)
-            setupWebSocket(ws,conn)
-            node.emit("connection",conn)
+export class WebSocketBroker extends BrokerBase<WebSocket>{
+    incomeDataType: Buffer = null as any
+    outcomeDataType: Buffer = null as any
+    raw?: WebSocketServer
+    constructor(opt:WsOption={}){
+        super(opt)
+        if(opt.isPublic){
+            this.raw = new WebSocketServer(opt).on("connection",ws=>{
+                let conn = this.createConnection(ws,true)
+                this.setupConnection(conn)
+            })
+        }
+    }
+    
+    setupConnection(conn:KonnectionBase<WebSocket>){
+        let ws = conn.raw
+        ws.on("message",(data:Buffer)=>{
+            conn.emit("data",data)
+        })
+        ws.on("close",(code,reason)=>{
+            conn.emit("close",reason)
+        })
+        ws.on("error",err=>{
+            conn.emit("error",err)
         })
     }
-    return {
-        raw:wss,
-        closeConnection(conn,reason){
-            conn.raw.close(reason?.code,reason?.reason)
-            return Promise.resolve()
-        },
-        sendTo(conn,data) {
-            conn.raw.send(data)
-            return Promise.resolve()
-        },
-        connectTo: (conn,addr)=>new Promise((res,rej)=>{
+    // start(emitConnection: (raw: WebSocket) => KonnectionBase<WebSocket>): void {
+
+    // }
+    async send(conn: KonnectionBase<WebSocket>, data: any) {
+        conn.raw.send(data)
+    }
+    async close(conn: KonnectionBase<WebSocket>, reason: any) {
+        conn.raw.close(reason?.code,reason?.reason)
+        conn.raw.removeAllListeners()
+    }
+    async connect(conn: KonnectionBase<WebSocket>, addr: Address){
+        return new Promise<void>((res,rej)=>{
             let url = UrlData.create(addr.url||"")
             if(!url) return rej()
             url.proto = "ws"
             let ws = new WebSocket(url.compose())
             ws.on("open",()=>{
-                node.emit("connection",conn)
+                conn.emit("connection",conn)
+                this.setupConnection(conn)
+                res()
             })
-            ws.on("error",err=>{
+            ws.once("error",err=>{
                 if("connect"===(err as any)?.syscall) rej()
             })
             conn.raw = ws
-            setupWebSocket(conn.raw,conn)
-            res()
-        }),
-        
+        })
     }
-}))
+    async shutdown?() {
+        this.raw?.close()
+    }
+    
+}

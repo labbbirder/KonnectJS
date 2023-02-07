@@ -10,7 +10,7 @@ type ReconnectOptions = Partial<{
     timeout:number
 }>
 
-export let KonnectReconnect = defineMidware(function(opt:ReconnectOptions={}){
+export let reconnect = defineMidware(function(opt:ReconnectOptions={}){
     let option = {
         timeout:1000,
         ...opt
@@ -111,7 +111,7 @@ type SplitOptions = {
 /**
  * avoid sticky package and half package problem. useful when your network protocol is stream-based
  */
-export let KonnectSplit = defineMidware(function(opt:SplitOptions={}){
+export let stream_to_packet = defineMidware(function(opt:SplitOptions={}){
     let option = {
         maxBytes:8<<10,
         ...opt
@@ -179,7 +179,7 @@ let bufPong = Buffer.from([HeartbeatMessage.PONG])
  * A connection detect strategy, which automatically closes connection on time exceeded.\
  * only works in **packet-based** protocol
  */
-export let KonnectHeartbeat = defineMidware(function(opt:HeartbeatOption={}){
+export let heartbeat = defineMidware(function(opt:HeartbeatOption={}){
     let option = {
         heartBeatInterval :2000,
         maxLifeime :6000,
@@ -192,7 +192,7 @@ export let KonnectHeartbeat = defineMidware(function(opt:HeartbeatOption={}){
     
     let lastBeat = Date.now()
     let itBeat:NodeJS.Timeout,itLife:NodeJS.Timeout
-    let heartbeat = ()=>{
+    let beat = ()=>{
         lastBeat = Date.now()
         itBeat&&clearTimeout(itBeat)
         itLife&&clearTimeout(itLife)
@@ -208,11 +208,11 @@ export let KonnectHeartbeat = defineMidware(function(opt:HeartbeatOption={}){
     }
     return async(ctx:Kontext<Buffer,Buffer>,next)=>{
         if(ctx.eventType==="connection"){
-            heartbeat()
+            beat()
             return await next()
         }
         if(ctx.eventType==="data"){
-            heartbeat()
+            beat()
             // if (!ctx.dataIn) return await next()
             if (ctx.dataIn?.at(0) == HeartbeatMessage.PING) {
                 if (ctx.dataIn.length == 1) { // got ping

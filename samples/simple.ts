@@ -1,5 +1,5 @@
-import { Knode,FilterEvent,Konnection,defineMidware,DebugEvent } from "KonnectJS";
-import { KonnectLocal } from "Konnect-local";
+import { Knode,Konnection,defineMidware, debug_event, filter_event } from "KonnectJS";
+import { LocalBroker } from "Konnect-local";
 
 
 // let debug = defineMidware((ev:string[]=["data"],prefix:string="")=>(ctx,next)=>{
@@ -11,8 +11,8 @@ import { KonnectLocal } from "Konnect-local";
 
 function createNode(nodeName:string){
     return new Knode()
-    .setImpl(KonnectLocal())
-    .use(["data"],DebugEvent,{prefix:nodeName})
+    .setBroker(new LocalBroker({}))
+    .use(["data"],debug_event({prefix:nodeName}))
     // .use(debug,["data","connection","close"],nodeName)
 }
 
@@ -24,7 +24,7 @@ let A = createNode("Node A"),
 
 
 
-B.use(FilterEvent,["data"])
+B.use(filter_event(["data"]))
 .use(function(){
     return ctx=>{
         this.localNode.broadcast(B2A,ctx.dataIn) //向后转发
@@ -37,10 +37,10 @@ B.use(FilterEvent,["data"])
  */
 
 
-let B2A = Konnection.from(B)
+let B2A = B.createConnection()
 B2A.connectTo(A)
-B.CreateConnectTo(C)
-B.CreateConnectTo(D)
+B.connectTo(C)
+B.connectTo(D)
 
 setTimeout(() => {
     A.broadcast("hello, from A")

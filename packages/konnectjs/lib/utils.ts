@@ -9,6 +9,7 @@ class UrlMetaData{
 }
 
 export class UrlData extends UrlMetaData{
+    // [k:string]:any
     private static fromEntries(fields:(keyof InstanceType<typeof UrlMetaData>)[],regRes:string[]){
         let url = new UrlData()
         fields.forEach((k,i) => {

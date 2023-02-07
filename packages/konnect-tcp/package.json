@@ -21,9 +21,7 @@
   "bugs": {
     "url": "https://github.com/labbbirder/KonnectJS/issues"
   },
-  "dependencies": {
-    "bl": "^6.0.0",
-    "koa-convert": "^2.0.0",
+  "peerDependencies": {
     "konnectjs": "^0.1.5"
   },
   "gitHead": "47865fa029da6e6a107330339c3e0d900fdf034f"

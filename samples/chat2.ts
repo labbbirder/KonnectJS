@@ -1,6 +1,6 @@
-import { Knode, ReformIO, DebugEvent } from "konnectjs";
-import { KonnectSplit,KonnectReconnect,KonnectHeartbeat } from "konnect-proto";
-import { KonnectTCP } from "konnect-tcp";
+import { Knode, reform_io, debug_event } from "konnectjs";
+import { stream_to_packet,reconnect,heartbeat } from "konnect-proto";
+import { TcpBroker } from "konnect-tcp";
 
 
 export function startServer(){
@@ -8,17 +8,17 @@ export function startServer(){
     let globalClientID = 0
 
     let node = new Knode()
-    .setImpl(KonnectTCP({port:3000,isServer:true}))
-    .use(KonnectSplit) //avoid sticky package and half package problem
-    .use(KonnectHeartbeat,{
+    .setBroker(new TcpBroker({port:3000,isPublic:true}))
+    .use(stream_to_packet()) //avoid sticky package and half package problem
+    .use(heartbeat({
         heartBeatInterval:2000,
         maxLifeime:6000,
-    })
-    .use(DebugEvent,{prefix:"server net"})
-    .use(ReformIO<string>, { // reform network io
+    }))
+    .use(debug_event({prefix:"server net"}))
+    .use(reform_io<string>({ // reform network io
         former:b=>b.toString(),
         unformer:s=>Buffer.from(s),
-    })
+    }))
     .use(()=>{
         let clientid = ++globalClientID
         return async ctx=>{
@@ -39,33 +39,36 @@ export function startServer(){
 
 export function startClient(){
     let node = new Knode()
-    .setImpl(KonnectTCP())
-    .use(KonnectSplit)
-    .use(KonnectHeartbeat,{
+    .setBroker(new TcpBroker({}))
+    .use(stream_to_packet())
+    .use(heartbeat({
         heartBeatInterval:3000,
         maxLifeime:7000,
-    })
-    .use(KonnectReconnect,{ timeout:1500 })
-    .use(DebugEvent,{prefix:"client"})
-    .use(ReformIO<string>, { // reform network io
+    }))
+    .use(reconnect({ timeout:1500 }))
+    .use(debug_event({prefix:"client"}))
+    .use(reform_io<string>({ // reform network io
         former:b=>b.toString(),
         unformer:s=>Buffer.from(s),
-    })
-    .use(DebugEvent,{prefix:"client2"})
+    }))
+    .use(debug_event({prefix:"client2"}))
     .use(["data"],()=>ctx=>{
         console.log("client recv - ",ctx.dataIn)
     })
-
-    return node.CreateConnectTo({url:"127.0.0.1:3000"})
+    return node.connectTo({url:"127.0.0.1:3000"})
 }
 
 
-// startServer()
-// startClient().on("connection",conn=>{
-//     conn.send("123")
-//     conn.send("456")
-// })
-// setTimeout(process.exit,1000)
+if(false) // ** COMMENT TO RUN: **
+{
+    startServer()
+    startClient().on("connection",conn=>{
+        console.log("on conn, send")
+        conn.send("123")
+        conn.send("456")
+    })
+    setTimeout(process.exit,3000)
+}
 
 /*
 On Server Side:

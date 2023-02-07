@@ -1,56 +1,77 @@
-import { defineImpl, Konnection,UrlData } from "konnectjs";
+import { BrokerBase,UrlData,Address, BrokerOption,KonnectionBase } from "konnectjs";
 import * as net from 'net'
 
-type Options = Partial<{
-    port:number,
-    isServer:boolean,
-    noDelay:boolean,
-    // ttl:number,
-}>
-type Connection = Konnection<net.Socket>
 
-function setupConnection(conn:Connection,socket:net.Socket){
-    socket.on("data",data=>{
-        conn.emit("data",data)
-    })
-    socket.on("close",(hasError)=>{
-        conn.emit("close")
-    })
-    socket.on("error",err=>{
-        if("ECONNRESET"===(err as any)?.code) return conn.emit("close")
-        // console.log("tcp error",err)
-        conn.emit("error",err)
-    })
+
+
+type TcpOption = BrokerOption & {
+    port?:number,
+    noDelay?:boolean,
 }
 
-export let KonnectTCP = defineImpl((options:Options={})=>node=>{
-    options = {
-        isServer:false,
-        noDelay:false,
-        ...options
+export class TcpBroker extends BrokerBase<net.Socket>{
+    incomeDataType: Buffer = null as any
+    outcomeDataType: Buffer = null as any
+    raw?: net.Server;
+    constructor(opt:TcpOption){
+        opt = {
+            noDelay:false,
+            isPublic:false,
+            ...opt
+        }
+        super(opt)
+        if(opt.isPublic){
+            this.raw = net.createServer(socket=>{
+                socket.setNoDelay(opt.noDelay)
+                let conn = this.createConnection(socket,true)
+                this.setupConnection(conn)
+            }).listen(opt.port)
+        }
     }
-    if(options.isServer){
-        net.createServer(socket=>{
-            socket.setNoDelay(options.noDelay)
-            let conn = Konnection.from(node,socket)
-            setupConnection(conn,socket)
-            node.emit("connection",conn)
-        }).listen(options.port)
+    private setupConnection(conn:KonnectionBase<net.Socket>){
+        let socket = conn.raw
+        socket.on("data",data=>{
+            conn.emit("data",data)
+        })
+        socket.on("close",(hasError)=>{
+            conn.emit("close")
+        })
+        socket.on("error",err=>{
+            //dont emit error when connection reset
+            if("ECONNRESET"===(err as any)?.code) return conn.emit("close")
+            // console.log("tcp error",err)
+            conn.emit("error",err)
+        })
     }
-
-    return {
-        sendTo(conn:Connection, data) {
+    async send(conn: KonnectionBase<net.Socket>, data: any) {
+        return new Promise<void>((res,rej)=>{
             if(!conn.raw.writable) return Promise.reject()
-            conn.raw.write(data)
-            return Promise.resolve()
-        },
-        connectTo:(conn:Connection, addr)=>new Promise((res,rej)=> {
-            let url = UrlData.create(addr.url||"")
+            function onSendFail(err:Error){
+                if("EPIPE"===(err as any)?.code) return rej(err)
+                console.log("send fail",err)
+            }
+            conn.once("error",onSendFail)
+            conn.raw.write(data,()=>{
+                conn.removeListener("error",onSendFail)
+                res()
+            })
+        })
+    }
+    async close(conn: KonnectionBase<net.Socket>, reason: any) {
+        return new Promise<void>((res,rej)=>{
+            conn.raw.end(()=>{
+                res()
+            })
+        })
+    }
+    connect(conn: KonnectionBase<net.Socket>, remote: Address) {
+        return new Promise<void>((res,rej)=> {
+            let url = UrlData.create(remote.url||"")
             if(!url) return rej()
             conn.raw = net.createConnection(url.portNum,url.host,()=>{})
             conn.raw.on("connect",()=>{
-                node.emit("connection",conn)
-                setupConnection(conn,conn.raw)
+                conn.emit("connection",conn)
+                this.setupConnection(conn)
                 res()
             })
             conn.raw.on("error",err=>{
@@ -60,10 +81,9 @@ export let KonnectTCP = defineImpl((options:Options={})=>node=>{
                     rej(err)
                 }
             })
-        }),
-        closeConnection(conn:Connection, reason) {
-            conn.raw.end()
-            return Promise.resolve()
-        },
+        })
     }
-})
+    async shutdown?(){
+        this.raw?.close()
+    }
+}

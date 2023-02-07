@@ -1,16 +1,17 @@
-import { FilterEvent, Knode, Konnection, ReformIO } from "KonnectJS";
-import { KonnectWS } from "Konnect-ws";
+import { debug_event, filter_event, Knode, Konnection, reform_io } from "konnectjs";
+import { WebSocketBroker } from "konnect-ws";
 export * from './common/types'
 
 export function startServer(){
     console.log("start")
     let globalClientID = 0
     let node = new Knode()
-    .setImpl(KonnectWS({port:3000,isServer:true})) // use WebSocket
-    .use(ReformIO<string>, { // reform network io
+    .use(debug_event({prefix:"server"}))
+    .setBroker(new WebSocketBroker({port:3000,isPublic:true})) // use WebSocket
+    .use(reform_io<string>( { // reform network io
         former:b=>b.toString(),
         unformer:s=>Buffer.from(s),
-    })
+    }))
     .use(()=>{
         globalClientID+=1
         let id = globalClientID
@@ -31,26 +32,24 @@ export function startServer(){
 
 export function startClient(){
     let node = new Knode()
-    .setImpl(KonnectWS())
-    .use(ReformIO<string>, { // reform network io
+    .setBroker(new WebSocketBroker({}))
+    .use(debug_event({prefix:"client"}))
+    .use(reform_io<string>( { // reform network io
         former:b=>b.toString(),
         unformer:s=>Buffer.from(s),
-    })
-    .use(FilterEvent,["data"])
+    }))
+    .use(filter_event(["data"]))
     .use(()=>ctx=>console.log(ctx.dataIn))
 
-    return node.CreateConnectTo({url:"127.0.0.1:3000"}) //return a konnection
+    return node.connectTo({url:"127.0.0.1:3000"}) //return a konnection
 }
 
+// startServer()
+// startClient().on("connection",conn=>{
+//     console.log("send")
+//     conn.send("Good")
+// })
 
-// const cli_opt = process.argv[3]
-// if(cli_opt=="-c"){
-//     startClient()
-// }
-// if(cli_opt=="-s"){
-//     startServer()
-// }
-// let c1 = startClient()
 /*
 On Server Side:
     import {startServer} from './chat'
