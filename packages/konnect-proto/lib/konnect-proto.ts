@@ -131,7 +131,7 @@ export let stream_to_packet = defineMidware(function(opt:SplitOptions={}){
             }
             let buf = bu.readBuffer(len)
             if(!buf) {
-                console.log("buf not enough",rcvBuffer.toString())
+                console.log("buf not enough",rcvBuffer.toString(),"length is",len)
                 return
             }
             ctx.dataIn = buf
@@ -179,13 +179,13 @@ let bufPong = Buffer.from([HeartbeatMessage.PONG])
  * A connection detect strategy, which automatically closes connection on time exceeded.\
  * only works in **packet-based** protocol
  */
-export let heartbeat = defineMidware(function(opt:HeartbeatOption={}){
+export let heartbeat = defineMidware(function(_opt:HeartbeatOption={}){
     let option = {
         heartBeatInterval :2000,
         maxLifeime :6000,
-        ...opt
-    } as Required<HeartbeatOption>
-
+        ..._opt
+    }
+    console.log(option)
     if(option.maxLifeime/option.heartBeatInterval<=2){
         console.warn("maxLifeime is recommended to be more than 2 times bigger than heartBeatInterval")
     }
@@ -200,11 +200,12 @@ export let heartbeat = defineMidware(function(opt:HeartbeatOption={}){
             if(lastBeat+option.heartBeatInterval < Date.now()){
                 this.send(bufPing)
             }
-        }, opt.heartBeatInterval)
+        }, option.heartBeatInterval)
         itLife = setTimeout(() => {
+            console.log("close on time out")
             this.close()
             // this.emit("close","heartbeat")
-        }, opt.maxLifeime);
+        }, option.maxLifeime);
     }
     return async(ctx:Kontext<Buffer,Buffer>,next)=>{
         if(ctx.eventType==="connection"){
@@ -216,7 +217,7 @@ export let heartbeat = defineMidware(function(opt:HeartbeatOption={}){
             // if (!ctx.dataIn) return await next()
             if (ctx.dataIn?.at(0) == HeartbeatMessage.PING) {
                 if (ctx.dataIn.length == 1) { // got ping
-                    await this.send(bufPong)
+                    await ctx.send(bufPong)
                     // ctx.dataIn = undefined
                     return
                 } else {
