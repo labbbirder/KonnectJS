@@ -186,9 +186,9 @@ export class Knode<TI=any,TO=any> extends KnodeBase{
         filter?:EventType[]
         // args:any[],
     }[] = []
-    override get nextKnode(): Knode {
-        return super.nextKnode as Knode
-    }
+    // override get nextKnode(): Knode {
+    //     return super.nextKnode as Knode
+    // }
 
     constructor(){
         super()

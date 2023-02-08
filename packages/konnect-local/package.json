@@ -22,7 +22,7 @@
     "url": "https://github.com/labbbirder/KonnectJS/issues"
   },
   "peerDependencies": {
-    "konnectjs": "^0.1.5"
+    "konnectjs": "*"
   },
   "gitHead": "47865fa029da6e6a107330339c3e0d900fdf034f"
 }

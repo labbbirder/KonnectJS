@@ -273,8 +273,10 @@ export class KnodeBase extends EventEmitter{
     connections:KonnectionBase[]
     broker:BrokerBase
     id:symbol
-    protected getNextKnode:()=>KnodeBase
-    get nextKnode(){
+    prevKnodes:this[]
+    protected getNextKnode:()=>this
+    
+    get nextKnode():this{
         return this.getNextKnode?.call(this)
     }
     // impl:ConnectionImpl    
@@ -360,8 +362,13 @@ export class KnodeBase extends EventEmitter{
     override emit(e:any,...args:any[]):any{
         throw Error("emitting on a knode is likely a wrong operation")
     }
-    to(fn:()=>KnodeBase){
-        this.getNextKnode = fn
+    to(fn:()=>this){
+        if(this.getNextKnode) throw Error("cannot call to multiple times")
+        this.getNextKnode = ()=>{
+            let n = fn()
+            n.prevKnodes.push(this)
+            return n
+        }
         return this
     }
 }

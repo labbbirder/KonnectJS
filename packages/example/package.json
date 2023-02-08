@@ -5,7 +5,7 @@
   "author": "labbbirder <502100554@qq.com>",
   "homepage": "https://github.com/labbbirder/KonnectJS#readme",
   "license": "ISC",
-  "main": "lib/example.js",
+  "main": "dist/example.js",
   "private":true,
   "files": [
     "lib"
@@ -15,9 +15,13 @@
     "url": "git+https://github.com/labbbirder/KonnectJS.git"
   },
   "scripts": {
-    "test": "node ./__tests__/example.test.js"
+    "test": "node ./__tests__/example.test.js",
+    "build": "tsc"
   },
   "bugs": {
     "url": "https://github.com/labbbirder/KonnectJS/issues"
+  },
+  "peerDependencies": {
+    "konnectjs":"*"
   }
 }

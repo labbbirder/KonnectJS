@@ -20,7 +20,7 @@
     "@types/ws": "^8.5.4"
   },
   "peerDependencies": {
-    "konnectjs": "^0.1.5"
+    "konnectjs": "*"
   },
   "gitHead": "47865fa029da6e6a107330339c3e0d900fdf034f"
 }
